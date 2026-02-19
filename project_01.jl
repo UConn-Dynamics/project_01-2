@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 0d9be664-d7c5-4084-add2-25e5418742d6
-using Latexify, Symbolics, ModelingToolkit, DifferentialEquations, Plots
+using Symbolics, ModelingToolkit, DifferentialEquations, Plots
 
 # ╔═╡ f17103ea-06bf-11f1-a2b0-79e68ed152eb
 md"""# Project_01 - Spinning Pendulum and the Lagrange equations
@@ -41,6 +41,9 @@ For now, if you don't have any ideas what to do, try adding a dampener to the eq
 
 """
 
+# ╔═╡ 548d67a6-4e91-4d1f-a407-18818a85708a
+import Latexify
+
 # ╔═╡ e2dfc44a-dd64-4527-af83-f7e5296c0768
 default(fontfamily = "Computer Modern", linewidth = 2, size = (800, 600))
 
@@ -58,35 +61,26 @@ The angular speed $\Omega$ is the speed at which $\phi$ is changing.
 """
 
 # ╔═╡ 910c7d40-5d28-448e-aaf7-486bb000f478
-@parameters L h1 w1 m g Ω
-
-# ╔═╡ 324f6bde-63bd-43c2-9dbf-b611cc61d96d
-@independent_variables t
-
-# ╔═╡ 02406c63-7a82-40be-bd02-95a02225ddc7
-@variables θ(t)
-
-# ╔═╡ c2aaca1a-f141-4926-8c3c-66f2526021f7
-D = Differential(t)
-
-# ╔═╡ c0418980-85c0-44f1-ac03-f55f8935d92b
-θ_dot = D(θ)
-
-# ╔═╡ e54968f6-00a1-4e67-a6de-9f6c5f7af01a
-θ_dot_dot = D(D(θ))
-
-# ╔═╡ 0035e9fd-1030-4b68-9e17-b9ea78b5894e
-φ = Ω * t
+# definining variables and basic equations.
+begin
+	@parameters L h1 w1 m g Ω
+	@independent_variables t
+	@variables θ(t)
+	D = Differential(t)
+	θ_dot = D(θ)
+	θ_dot_dot = D(D(θ))
+	φ = Ω * t
+end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
 md"""
 Treating the top of the pendulum as $(0,0)$ in the rotating frame. Then the rotating position vector is:
 
-$\vec{r}_{rot} = \begin{bmatrix} L\sin(\theta) \\ 0 \\ -L\cos(\theta)\end{bmatrix}$
+$\vec{r}_{rot} = \begin{bmatrix} L\sin(\theta)\cos(\phi) \\ L\sin(\theta)\sin(\phi) \\ -L\cos(\theta)\end{bmatrix}$
 """
 
 # ╔═╡ cbd246ac-cbc8-4301-b224-87e92f7912b5
-r_rot = [L*sin(θ), 0, -L*cos(θ)]
+r_rot = [L*sin(θ)*cos(φ), L*sin(θ)*sin(φ), -L*cos(θ)]
 
 # ╔═╡ 89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
 md"""
@@ -129,19 +123,14 @@ $T = \frac{1}{2}m\left(\frac{d\vec{r}}{dt} \cdot \frac{d\vec{r}}{dt}\right)$
 """
 
 # ╔═╡ 61500b9e-061e-4412-9fa7-9931ad27bee4
-h = r[3]
-
-# ╔═╡ 7d784f47-f18e-45f9-b346-276898174201
-v = simplify(expand_derivatives(D.(r)))
-
-# ╔═╡ 7aa4330e-2ac7-47ff-aa97-a13925217fa9
-T = simplify(expand_derivatives(m/2*sum(v .* v)))
-
-# ╔═╡ 07cc619f-40bf-4820-97a8-bbac49e355a9
-V = m*g*h
-
-# ╔═╡ b2551635-6458-43c2-9f26-5e24d9287e42
-Lag = simplify(T - V)
+# defining lagrangian stuff
+begin
+	h = r[3]
+	v = D.(r)
+	T = m/2*sum(v .* v)
+	V = m*g*h
+	Lag = expand_derivatives(T - V)
+end
 
 # ╔═╡ 107838fd-dc24-4b35-bc0f-531cfc6362f2
 md"""Now with our Lagrangian, we can find the path of least action using the Euler-Lagrange equation:
@@ -151,46 +140,47 @@ $\frac{d}{dt}\left( \frac{d L}{d \dot{\theta}} \right) - \frac{d L}{d \theta}= 0
 """
 
 # ╔═╡ 242302eb-fe7e-4c20-83a2-f5a976fbbac9
-dL_dθ = simplify(Symbolics.derivative(Lag, θ))
-
-# ╔═╡ 07332807-9b33-4641-98b4-faf973c5bafe
-dL_dθ_dot = simplify(Symbolics.derivative(Lag, θ_dot))
-
-# ╔═╡ 3fbfb28f-b653-4b01-b2a2-734068a55985
-el_eq = simplify(expand_derivatives(D(dL_dθ_dot) - dL_dθ))
-
-# ╔═╡ d62449c9-5dc1-446d-a42e-eafab02e63a3
-sol = simplify(solve_for(el_eq ~ θ, θ_dot_dot))
+# performing euler-lagrange equation stuff
+begin
+	dL_dθ = Symbolics.derivative(Lag, θ)
+	dL_dθ_dot = Symbolics.derivative(Lag, θ_dot)
+	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ)
+	sol = simplify(solve_for(el_eq ~ θ, θ_dot_dot))
+end
 
 # ╔═╡ 28406b28-a701-4b46-8620-5df4a5dc70ae
-@variables x1(t) x2(t)
-
-# ╔═╡ 2a3bf6d6-436e-4cfb-a176-b0da0311a1cb
-rhs_expr = substitute(sol, Dict(θ => x1, θ_dot => x2))
-
-# ╔═╡ 6f9d3b7c-7ce4-4f5d-ba47-1b81f963824c
-eqs = [
-	D(x1) ~ x2,
-	D(x2) ~ rhs_expr
-]
-
-# ╔═╡ 0f2b797d-88e8-429b-adba-0bf284054539
-@named sys = ODESystem(eqs, t, [x1, x2], [L, g, Ω, m, w1, h1])
-
-# ╔═╡ 26d2d983-1d63-4a9e-a221-6cd37b661ddf
-syss = structural_simplify(sys)
+# setting up numerical solver
+begin
+	@variables x1(t) x2(t)
+	rhs_expr = substitute(sol, Dict(θ => x1, θ_dot => x2))
+	eqs = [
+		D(x1) ~ x2,
+		D(x2) ~ rhs_expr
+	]
+	@named sys = ODESystem(eqs, t, [x1, x2], [L, g, Ω, m, w1, h1])
+	sys = structural_simplify(sys)
+end
 
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
+# setting up initial conditions and running ODE solver
 begin
-	u0 = [x1 => 1.0, x2 => 0.0] #initial θ and θ_dot
+	u0 = [x1 => 0.5, x2 => 0.0] #initial θ and θ_dot
 	tspan = (0.0, 10.0)
-	p_vals = Dict(L => 0.15, g => 9.81, Ω => 2.0, m => 1.0, w1 => 0.1, h1 => 0.2)
+	p_vals = Dict(L => 0.15, g => 9.8, Ω => 2.0, m => 1.0, w1 => 0.1, h1 => 0.2)
 
-	prob = ODEProblem(syss, merge(Dict(u0), Dict(p_vals)), tspan)
-	solution = solve(prob, Tsit5())
-
-	Plots.plot(solution, idxs=[x1], xlabel="t", ylabel="θ (rad)", title="Angle vs. Time")
+	prob = ODEProblem(sys, merge(Dict(u0), Dict(p_vals)), tspan)
+	solution = solve(prob, Rodas5();
+						reltol = 1e-6,
+						abstol = 1e-8,
+					 	saveat = 0.0333,
+					)
 end
+
+# ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+Plots.plot(solution, idxs=[x1], xlabel="t", ylabel="θ (rad)", title="Angle vs. Time")
+
+# ╔═╡ 3b72fdac-c439-4755-b501-dc1de46f4414
+Plots.plot(solution, idxs=[x2], xlabel="t", ylabel="θ/s (rad/sec)", title="Angular Velocity vs. Time")
 
 # ╔═╡ fcd29939-01e8-42ae-8fef-f70ca60eebef
 begin # Need everything numerically for graphing and stuff
@@ -279,12 +269,7 @@ begin
 end
 
 # ╔═╡ 077d3892-d766-4011-8ed4-c04969e8acb8
-begin
-	timestep = t_vals[2] - t_vals[1]
-	fps_real_time = round(1 / timestep; digits = 2)
-	
-	gif(pendulum_animation, "pendulum_3d.gif", fps=fps_real_time)
-end
+gif(pendulum_animation, "pendulum_3d.gif", fps=30)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3206,15 +3191,10 @@ version = "1.13.0+0"
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
 # ╟─e60241b5-d35a-495a-ae92-edb846c41bb8
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
+# ╠═548d67a6-4e91-4d1f-a407-18818a85708a
 # ╠═e2dfc44a-dd64-4527-af83-f7e5296c0768
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
-# ╠═324f6bde-63bd-43c2-9dbf-b611cc61d96d
-# ╠═02406c63-7a82-40be-bd02-95a02225ddc7
-# ╠═c2aaca1a-f141-4926-8c3c-66f2526021f7
-# ╠═c0418980-85c0-44f1-ac03-f55f8935d92b
-# ╠═e54968f6-00a1-4e67-a6de-9f6c5f7af01a
-# ╠═0035e9fd-1030-4b68-9e17-b9ea78b5894e
 # ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
 # ╠═cbd246ac-cbc8-4301-b224-87e92f7912b5
 # ╟─89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
@@ -3224,23 +3204,14 @@ version = "1.13.0+0"
 # ╟─2c97d2eb-070c-499f-8bbc-9f650953ccd1
 # ╟─9a46c115-04c9-42cc-9592-5f9d08014735
 # ╠═61500b9e-061e-4412-9fa7-9931ad27bee4
-# ╠═7d784f47-f18e-45f9-b346-276898174201
-# ╠═7aa4330e-2ac7-47ff-aa97-a13925217fa9
-# ╠═07cc619f-40bf-4820-97a8-bbac49e355a9
-# ╠═b2551635-6458-43c2-9f26-5e24d9287e42
 # ╟─107838fd-dc24-4b35-bc0f-531cfc6362f2
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
-# ╠═07332807-9b33-4641-98b4-faf973c5bafe
-# ╠═3fbfb28f-b653-4b01-b2a2-734068a55985
-# ╠═d62449c9-5dc1-446d-a42e-eafab02e63a3
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
-# ╠═2a3bf6d6-436e-4cfb-a176-b0da0311a1cb
-# ╠═6f9d3b7c-7ce4-4f5d-ba47-1b81f963824c
-# ╠═0f2b797d-88e8-429b-adba-0bf284054539
-# ╠═26d2d983-1d63-4a9e-a221-6cd37b661ddf
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
+# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╟─3b72fdac-c439-4755-b501-dc1de46f4414
 # ╠═fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╠═ce3510bf-40ff-40fb-8394-a22fe3eebc48
+# ╟─ce3510bf-40ff-40fb-8394-a22fe3eebc48
 # ╠═077d3892-d766-4011-8ed4-c04969e8acb8
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
