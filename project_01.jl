@@ -47,6 +47,9 @@ import Latexify
 # ╔═╡ e2dfc44a-dd64-4527-af83-f7e5296c0768
 default(fontfamily = "Computer Modern", linewidth = 2, size = (800, 600))
 
+# ╔═╡ db03ea44-81a2-44d9-9e91-96aa68832fa2
+Plots.default(dpi = 600, size = (900, 600))
+
 # ╔═╡ 91003e71-8208-43d3-93be-dd2c141c37b5
 md"""# Defining Coordinate System
 
@@ -151,13 +154,13 @@ end
 # ╔═╡ 28406b28-a701-4b46-8620-5df4a5dc70ae
 # setting up numerical equation for ODE solving
 begin
-	@variables x1(t) x2(t)
-	rhs_expr = substitute(sol, Dict(θ => x1, θ_dot => x2))
+	@variables θ_s(t) ω_s(t)
+	rhs_expr = substitute(sol, Dict(θ => θ_s, θ_dot => ω_s))
 	eqs = [
-		D(x1) ~ x2,
-		D(x2) ~ rhs_expr
+		D(θ_s) ~ ω_s,
+		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [x1, x2], [L, g, Ω, m, w1, h1])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1])
 	sys = structural_simplify(sys)
 end
 
@@ -165,7 +168,7 @@ end
 # compute ODE using specified variables
 function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0, tspan=(0.0,10.0))
 	
-	u0 = Dict(x1 => θ_0, x2 => θ_dot_0)
+	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
 	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val)
 
@@ -185,14 +188,24 @@ begin
 end
 
 # ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# Plots.plot(sol_no, idxs=[x1], xlabel="t", ylabel="θ (rad)", title="Angle vs. Time")
+begin
+	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time Without Rotation")
+	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time With Slow Rotation")
+	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time With Fast Rotation")
+	plot(plot_no, plot_slow, plot_fast; layout=(1,3), size=(1200, 300))
+end
 
-# ╔═╡ 3b72fdac-c439-4755-b501-dc1de46f4414
-# Plots.plot(sol_no, idxs=[x2], xlabel="t", ylabel="θ/s (rad/sec)", title="Angular Velocity vs. Time")
+# ╔═╡ 1e0bd7c3-ec63-452e-9849-1f9579017f9c
+begin
+	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time Without Rotation")
+	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time With Slow Rotation")
+	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time With Fast Rotation")
+	plot(plot_ω_no, plot_ω_slow, plot_ω_fast; layout=(1,3), size=(1200, 300))
+end
 
 # ╔═╡ 0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 function compute_pendulum_geometry(sol, p)
-	θ_vals = sol[x1]
+	θ_vals = sol[θ_s]
 	t_vals = sol.t
 	Ω_val = p[Ω]
 	L_val = p[L]
@@ -3218,6 +3231,7 @@ version = "1.13.0+0"
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
 # ╠═548d67a6-4e91-4d1f-a407-18818a85708a
 # ╠═e2dfc44a-dd64-4527-af83-f7e5296c0768
+# ╠═db03ea44-81a2-44d9-9e91-96aa68832fa2
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
 # ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
@@ -3235,7 +3249,7 @@ version = "1.13.0+0"
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╠═3b72fdac-c439-4755-b501-dc1de46f4414
+# ╠═1e0bd7c3-ec63-452e-9849-1f9579017f9c
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
 # ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
