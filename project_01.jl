@@ -145,11 +145,11 @@ begin
 	dL_dθ = Symbolics.derivative(Lag, θ)
 	dL_dθ_dot = Symbolics.derivative(Lag, θ_dot)
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ)
-	sol = simplify(solve_for(el_eq ~ θ, θ_dot_dot))
+	sol = simplify(solve_for(el_eq ~ 0, θ_dot_dot))
 end
 
 # ╔═╡ 28406b28-a701-4b46-8620-5df4a5dc70ae
-# setting up numerical solver
+# setting up numerical equation for ODE solving
 begin
 	@variables x1(t) x2(t)
 	rhs_expr = substitute(sol, Dict(θ => x1, θ_dot => x2))
@@ -161,66 +161,83 @@ begin
 	sys = structural_simplify(sys)
 end
 
-# ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# setting up initial conditions and running ODE solver
-begin
-	u0 = [x1 => 0.5, x2 => 0.0] #initial θ and θ_dot
-	tspan = (0.0, 10.0)
-	p_vals = Dict(L => 0.15, g => 9.8, Ω => 2.0, m => 1.0, w1 => 0.1, h1 => 0.2)
+# ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
+# compute ODE using specified variables
+function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0, tspan=(0.0,10.0))
+	
+	u0 = Dict(x1 => θ_0, x2 => θ_dot_0)
 
-	prob = ODEProblem(sys, merge(Dict(u0), Dict(p_vals)), tspan)
-	solution = solve(prob, Rodas5();
-						reltol = 1e-6,
-						abstol = 1e-8,
-					 	saveat = 0.0333,
-					)
+	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val)
+
+	prob = ODEProblem(sys, merge(u0, p), tspan)
+
+	sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
+
+	return sol, p
+end
+
+# ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
+# 3 cases, no rotation, slow rotation, fast rotation
+begin
+	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
+   	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
+    sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0)
 end
 
 # ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-Plots.plot(solution, idxs=[x1], xlabel="t", ylabel="θ (rad)", title="Angle vs. Time")
+# Plots.plot(sol_no, idxs=[x1], xlabel="t", ylabel="θ (rad)", title="Angle vs. Time")
 
 # ╔═╡ 3b72fdac-c439-4755-b501-dc1de46f4414
-Plots.plot(solution, idxs=[x2], xlabel="t", ylabel="θ/s (rad/sec)", title="Angular Velocity vs. Time")
+# Plots.plot(sol_no, idxs=[x2], xlabel="t", ylabel="θ/s (rad/sec)", title="Angular Velocity vs. Time")
 
-# ╔═╡ fcd29939-01e8-42ae-8fef-f70ca60eebef
-begin # Need everything numerically for graphing and stuff
-	θ_vals = solution[x1]
-	t_vals = solution.t
-	φ_vals = p_vals[Ω] .* t_vals
+# ╔═╡ 0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
+function compute_pendulum_geometry(sol, p)
+	θ_vals = sol[x1]
+	t_vals = sol.t
+	Ω_val = p[Ω]
+	L_val = p[L]
+	w_val = p[w1]
+	h_val = p[h1]
+	φ_vals = Ω_val .* t_vals
+	
+	r_x = L_val .* sin.(θ_vals) .*  cos.(φ_vals)  .+ w_val .* cos.(φ_vals)
+	r_y = L_val .*  sin.(θ_vals)  .* sin.(φ_vals) .+ w_val .* sin.(φ_vals)
+	r_z = -L_val .* cos.(θ_vals) .+ h_val
 
-	r_x = p_vals[L] .* sin.(θ_vals) .+ p_vals[w1] .* cos.(φ_vals)
-	r_y = zeros(length(t_vals)) .+ p_vals[w1] .* sin.(φ_vals)
-	r_z = -p_vals[L] .* cos.(θ_vals) .+ p_vals[h1]
 
-	frame_top_x_values = p_vals[w1] .* cos.(φ_vals)
-	frame_top_y_values = p_vals[w1] .* sin.(φ_vals)
-	frame_top_z_values = fill(p_vals[h1], length(t_vals))
+	frame_top_x_values = w_val .* cos.(φ_vals)
+	frame_top_y_values = w_val .* sin.(φ_vals)
+	frame_top_z_values = fill(h_val, length(t_vals))
+
+	max_radius = L_val + w_val
+
+	return (; t_vals, r_x, r_y, r_z, frame_top_x_values, frame_top_y_values, frame_top_z_values, max_radius, h_val, L_val)
 end
 
-# ╔═╡ ce3510bf-40ff-40fb-8394-a22fe3eebc48
-begin
-	max_radius = p_vals[L] + p_vals[w1]
+# ╔═╡ fcd29939-01e8-42ae-8fef-f70ca60eebef
+function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotating Frame", filename = "pendulum_3d.gif", fps=30)
+	geometry = compute_pendulum_geometry(solution, parameters)
 
-	pendulum_animation = @animate for index in eachindex(t_vals)
+	pendulum_animation = @animate for index in eachindex(geometry.t_vals)
 	    # Static vertical frame: from (0,0,0) up to (0,0,h1)
 	    vertical_x = [0.0, 0.0]
 	    vertical_y = [0.0, 0.0]
-	    vertical_z = [0.0, p_vals[h1]]
+	    vertical_z = [0.0, geometry.h_val]
 	
 	    # Rotating horizontal arm: from top of frame to moving pivot
-	    arm_x = [0.0, frame_top_x_values[index]]
-	    arm_y = [0.0, frame_top_y_values[index]]
-	    arm_z = [p_vals[h1], frame_top_z_values[index]]
+	    arm_x = [0.0, geometry.frame_top_x_values[index]]
+	    arm_y = [0.0, geometry.frame_top_y_values[index]]
+	    arm_z = [geometry.h_val, geometry.frame_top_z_values[index]]
 	
 	    # Pendulum rod: from moving pivot to bob
-	    rod_x = [frame_top_x_values[index], r_x[index]]
-	    rod_y = [frame_top_y_values[index], r_y[index]]
-	    rod_z = [frame_top_z_values[index], r_z[index]]
+	    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
+	    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
+	    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
 
 		
-		trace_x = r_x[1:index]
-		trace_y = r_y[1:index]
-		trace_z = r_z[1:index]
+		trace_x = geometry.r_x[1:index]
+		trace_y = geometry.r_y[1:index]
+		trace_z = geometry.r_z[1:index]
 		
 		plot3d(
 			trace_x, trace_y, trace_z;
@@ -228,14 +245,14 @@ begin
 			linestyle  = :dot,
 			linecolor  = :blue,
 			linewidth  = 2,
-			xlim       = (-max_radius, max_radius),
-			ylim       = (-max_radius, max_radius),
-			zlim       = (0.0, p_vals[h1] + p_vals[L] + 0.1),
+			xlim       = (-geometry.max_radius, geometry.max_radius),
+			ylim       = (-geometry.max_radius, geometry.max_radius),
+			zlim       = (0.0, geometry.h_val + geometry.L_val + 0.1),
 			aspect_ratio = :equal,
 			xlabel     = "x",
 			ylabel     = "y",
 			zlabel     = "z",
-			title      = "3D Pendulum on Rotating Frame (t = $(round(t_vals[index]; digits = 2)) s)",
+			title      = title * " (t = $(round(geometry.t_vals[index]; digits = 2)) s)",
 		)
 
 	
@@ -246,7 +263,7 @@ begin
 	        linewidth = 3,
 	    )
 
-		scatter3d!([r_x[index]], [r_y[index]], [r_z[index]],
+		scatter3d!([geometry.r_x[index]], [geometry.r_y[index]], [geometry.r_z[index]],
 	        label       = "Bob",
 	        markercolor = :red,
 	        markersize  = 6,
@@ -266,10 +283,18 @@ begin
 	
 	    
 	end
+
+	gif(pendulum_animation, filename, fps=30)
 end
 
-# ╔═╡ 077d3892-d766-4011-8ed4-c04969e8acb8
-gif(pendulum_animation, "pendulum_3d.gif", fps=30)
+# ╔═╡ 9c67720a-bb46-4b57-9a88-898147c0f77e
+animate_pendulum_3d(sol_no, p_no; title="3D Pendulum Without Rotation")
+
+# ╔═╡ 4bf427a3-a066-4abd-8be0-623e9d0aadf8
+animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum With Slow Rotation")
+
+# ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
+animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum With Fast Rotation")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3207,11 +3232,14 @@ version = "1.13.0+0"
 # ╟─107838fd-dc24-4b35-bc0f-531cfc6362f2
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
+# ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╟─3b72fdac-c439-4755-b501-dc1de46f4414
-# ╠═fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╟─ce3510bf-40ff-40fb-8394-a22fe3eebc48
-# ╠═077d3892-d766-4011-8ed4-c04969e8acb8
+# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╠═3b72fdac-c439-4755-b501-dc1de46f4414
+# ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
+# ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
+# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
+# ╠═4bf427a3-a066-4abd-8be0-623e9d0aadf8
+# ╠═7f52e3e0-5691-4093-a9dc-af84bdd368fc
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
