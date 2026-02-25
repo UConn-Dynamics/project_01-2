@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 0d9be664-d7c5-4084-add2-25e5418742d6
-using Symbolics, ModelingToolkit, DifferentialEquations, Plots
+using Symbolics, ModelingToolkit, DifferentialEquations, Plots, Latexify
 
 # ╔═╡ f17103ea-06bf-11f1-a2b0-79e68ed152eb
 md"""# Project_01 - Spinning Pendulum and the Lagrange equations
@@ -41,25 +41,14 @@ For now, if you don't have any ideas what to do, try adding a dampener to the eq
 
 """
 
-# ╔═╡ 548d67a6-4e91-4d1f-a407-18818a85708a
-import Latexify
-
-# ╔═╡ e2dfc44a-dd64-4527-af83-f7e5296c0768
-default(fontfamily = "Computer Modern", linewidth = 2, size = (800, 600))
-
-# ╔═╡ db03ea44-81a2-44d9-9e91-96aa68832fa2
-Plots.default(dpi = 600, size = (900, 600))
-
 # ╔═╡ 91003e71-8208-43d3-93be-dd2c141c37b5
-md"""# Defining Coordinate System
+md"""# Defining Generalized Coordinate System
 
-We will start by defining our coordinate system. We will have 2 coordinate systems, the rotating frame, which is the $x'-z'$ plane which we can treat as a 2D coordinate system since the pendulum will always swing in said frame.
+We will start by defining our coordinate system. We can first do this by determining our Greubler Count. Since this system is 1 body, $N=1$ and thus our Greubler Count is $DOF=3-C$. Since our pendulum has a constant string length of $L$ and must lie in the $x'-y'$ plane, $C=2$ and we have 1 DOF, $\theta(t)$.
 
-The angle $\theta$ is relative to the vertical in the rotating frame (i.e. the angle in a traditional pendulum problem)
+The angle $\theta(t)$ is relative to the vertical in the rotating frame (i.e. the angle in a traditional pendulum problem)
 
-The angle $\phi$ is the angle at which the pendulum's $x'-z'$ plane is rotated from the positive $x$-axis.
-
-The angular speed $\Omega$ is the speed at which $\phi$ is changing.
+The angle $\phi(t)$ is the angle at which the pendulum's $x'-z'$ plane is rotated from the positive $x$-axis. Since it is rotating at a constant speed, this angle $\phi$ is not a DOF and $\phi(t) = \Omega t$.
 
 """
 
@@ -77,7 +66,11 @@ end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
 md"""
-Treating the top of the pendulum as $(0,0)$ in the rotating frame. Then the rotating position vector is:
+Relative to the top of the frame in the $x'-y'$ plane, the position of the bob is:
+
+$\vec{r}_{x'-z'} = \begin{bmatrix} L\sin(\theta) \\ -L\cos(\theta)\end{bmatrix}$
+
+Translating the $x'$ coordinate into $(x, y)$ we get the following position in our generalized coordinates:
 
 $\vec{r}_{rot} = \begin{bmatrix} L\sin(\theta)\cos(\phi) \\ L\sin(\theta)\sin(\phi) \\ -L\cos(\theta)\end{bmatrix}$
 """
@@ -87,7 +80,11 @@ r_rot = [L*sin(θ)*cos(φ), L*sin(θ)*sin(φ), -L*cos(θ)]
 
 # ╔═╡ 89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
 md"""
-In the inertial frame the position vector of the top of the pendulum is:
+The position of the top of the frame is:
+
+$\vec{r}_{x'-z'} = \begin{bmatrix} w_1 \\ h_1 \end{bmatrix}$
+
+Translating the $x'$ coordinate into $(x, y)$ we get the following generalized coordinate:
 
 $\vec{r}_{0} = \begin{bmatrix} w_1\cos(\phi) \\ w_1\sin(\phi) \\ h_1 \end{bmatrix}$
 """
@@ -97,9 +94,12 @@ r_0 = [w1*cos(φ), w1*sin(φ), h1]
 
 # ╔═╡ d8d43e4b-a976-4535-a3f0-c2230fd55631
 md"""
-So, the total position vector is then:
+So, the total generalized position vector is then:
 
 $\vec{r} = \vec{r}_{rot}+\vec{r}_0$
+
+$\vec{r} = \begin{bmatrix} w_1\cos(\phi) + L\sin(\theta)\cos(\phi) \\ w_1\sin(\phi) + L\sin(\theta)\sin(\phi) \\ h_1 -L\cos(\theta) \end{bmatrix}$
+
 """
 
 # ╔═╡ 21a2c22e-99a7-46b5-b898-22028948e114
@@ -107,22 +107,11 @@ r = r_rot .+ r_0
 
 # ╔═╡ 2c97d2eb-070c-499f-8bbc-9f650953ccd1
 md"""
-The Lagrangian is:
+We now compute the Lagrangian $L = T-V$. 
 
-$L = T - V$
+Where $T = \frac{1}{2}m |\vec{\dot{r}}|^2$ and $V = mgh$
 
-$T = \frac{1}{2}mv^2$
-
-$V = mgh$
-"""
-
-# ╔═╡ 9a46c115-04c9-42cc-9592-5f9d08014735
-md"""
-$h = z = h_1 - L\cos(\theta)$
-
-$v = \frac{d\vec{r}}{dt}$
-
-$T = \frac{1}{2}m\left(\frac{d\vec{r}}{dt} \cdot \frac{d\vec{r}}{dt}\right)$
+For V we choose the plane $z=0$ as our reference point, so that we can use our $z$ coordinate for h.
 """
 
 # ╔═╡ 61500b9e-061e-4412-9fa7-9931ad27bee4
@@ -150,6 +139,11 @@ begin
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ)
 	sol = simplify(solve_for(el_eq ~ 0, θ_dot_dot))
 end
+
+# ╔═╡ 93902fe2-5fcd-4f16-8384-9768002d9ee1
+md"""
+To solve this 2nd order ODE, we deconstruct it into a system of 2 1st order ODEs, defining it as an ODESystem object.
+"""
 
 # ╔═╡ 28406b28-a701-4b46-8620-5df4a5dc70ae
 # setting up numerical equation for ODE solving
@@ -248,9 +242,13 @@ function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotat
 	    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
 
 		
-		trace_x = geometry.r_x[1:index]
-		trace_y = geometry.r_y[1:index]
-		trace_z = geometry.r_z[1:index]
+		# trail_length = 200  # fixed number of recent points
+
+		# start_index = max(1, index - trail_length)
+		
+		trace_x = @view geometry.r_x[1:index]
+		trace_y = @view geometry.r_y[1:index]
+		trace_z = @view geometry.r_z[1:index]
 		
 		plot3d(
 			trace_x, trace_y, trace_z;
@@ -3229,31 +3227,28 @@ version = "1.13.0+0"
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
 # ╟─e60241b5-d35a-495a-ae92-edb846c41bb8
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
-# ╠═548d67a6-4e91-4d1f-a407-18818a85708a
-# ╠═e2dfc44a-dd64-4527-af83-f7e5296c0768
-# ╠═db03ea44-81a2-44d9-9e91-96aa68832fa2
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
-# ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
+# ╠═e28f72c0-7df2-4029-ab2a-4f21f2bade62
 # ╠═cbd246ac-cbc8-4301-b224-87e92f7912b5
-# ╟─89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
+# ╠═89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
 # ╠═342f30ae-5a57-4330-8a18-8a9b1eabd74f
-# ╟─d8d43e4b-a976-4535-a3f0-c2230fd55631
+# ╠═d8d43e4b-a976-4535-a3f0-c2230fd55631
 # ╠═21a2c22e-99a7-46b5-b898-22028948e114
 # ╟─2c97d2eb-070c-499f-8bbc-9f650953ccd1
-# ╟─9a46c115-04c9-42cc-9592-5f9d08014735
 # ╠═61500b9e-061e-4412-9fa7-9931ad27bee4
 # ╟─107838fd-dc24-4b35-bc0f-531cfc6362f2
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
+# ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╠═1e0bd7c3-ec63-452e-9849-1f9579017f9c
+# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╟─1e0bd7c3-ec63-452e-9849-1f9579017f9c
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
-# ╠═4bf427a3-a066-4abd-8be0-623e9d0aadf8
-# ╠═7f52e3e0-5691-4093-a9dc-af84bdd368fc
+# ╟─9c67720a-bb46-4b57-9a88-898147c0f77e
+# ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
+# ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
