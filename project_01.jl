@@ -76,7 +76,7 @@ $\vec{r}_{rot} = \begin{bmatrix} L\sin(\theta)\cos(\phi) \\ L\sin(\theta)\sin(\p
 """
 
 # ╔═╡ cbd246ac-cbc8-4301-b224-87e92f7912b5
-r_rot = [L*sin(θ)*cos(φ), L*sin(θ)*sin(φ), -L*cos(θ)]
+r_rot = [L*sin(θ)*cos(φ) L*sin(θ)*sin(φ) -L*cos(θ)]
 
 # ╔═╡ 89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
 md"""
@@ -90,7 +90,7 @@ $\vec{r}_{0} = \begin{bmatrix} w_1\cos(\phi) \\ w_1\sin(\phi) \\ h_1 \end{bmatri
 """
 
 # ╔═╡ 342f30ae-5a57-4330-8a18-8a9b1eabd74f
-r_0 = [w1*cos(φ), w1*sin(φ), h1]
+r_0 = [w1*cos(φ) w1*sin(φ) h1]
 
 # ╔═╡ d8d43e4b-a976-4535-a3f0-c2230fd55631
 md"""
@@ -103,7 +103,7 @@ $\vec{r} = \begin{bmatrix} w_1\cos(\phi) + L\sin(\theta)\cos(\phi) \\ w_1\sin(\p
 """
 
 # ╔═╡ 21a2c22e-99a7-46b5-b898-22028948e114
-r = r_rot .+ r_0
+r = r_rot + r_0
 
 # ╔═╡ 2c97d2eb-070c-499f-8bbc-9f650953ccd1
 md"""
@@ -179,6 +179,7 @@ begin
 	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
    	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
     sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0)
+	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
 end
 
 # ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
@@ -264,6 +265,7 @@ function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotat
 			ylabel     = "y",
 			zlabel     = "z",
 			title      = title * " (t = $(round(geometry.t_vals[index]; digits = 2)) s)",
+			legend = false,
 		)
 
 	
@@ -306,6 +308,9 @@ animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum With Slow Rotation")
 
 # ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
 animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum With Fast Rotation")
+
+# ╔═╡ 2c648029-9916-43dd-94b7-219fd5dec97d
+animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum With Very Fast Rotation")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3229,11 +3234,11 @@ version = "1.13.0+0"
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
-# ╠═e28f72c0-7df2-4029-ab2a-4f21f2bade62
+# ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
 # ╠═cbd246ac-cbc8-4301-b224-87e92f7912b5
-# ╠═89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
+# ╟─89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
 # ╠═342f30ae-5a57-4330-8a18-8a9b1eabd74f
-# ╠═d8d43e4b-a976-4535-a3f0-c2230fd55631
+# ╟─d8d43e4b-a976-4535-a3f0-c2230fd55631
 # ╠═21a2c22e-99a7-46b5-b898-22028948e114
 # ╟─2c97d2eb-070c-499f-8bbc-9f650953ccd1
 # ╠═61500b9e-061e-4412-9fa7-9931ad27bee4
@@ -3241,7 +3246,7 @@ version = "1.13.0+0"
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
-# ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
+# ╟─44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
 # ╟─1e0bd7c3-ec63-452e-9849-1f9579017f9c
@@ -3250,5 +3255,6 @@ version = "1.13.0+0"
 # ╟─9c67720a-bb46-4b57-9a88-898147c0f77e
 # ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
 # ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
+# ╟─2c648029-9916-43dd-94b7-219fd5dec97d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
