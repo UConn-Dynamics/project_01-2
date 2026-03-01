@@ -28,27 +28,18 @@ Your team's goal is to
 
 """
 
-# ╔═╡ e60241b5-d35a-495a-ae92-edb846c41bb8
-md"""# Things To Add
-
-Hey Everyone! 
-
-I've added in the basic equations going through the coordinate system definition and lagrangian definition up to a 3d animation of the pendulum. 
-
-Please feel free to add on whatever you think would be nice, whether it would be more explainations for certain sections, or possibly adding dampeners.
-
-For now, if you don't have any ideas what to do, try adding a dampener to the equation and rederive the lagrange expression, or then you can animate it in 3d the same way the basic one was. You can also plot more variables or try to mess with initial conditions to see how the system responds.
-
-"""
-
 # ╔═╡ 91003e71-8208-43d3-93be-dd2c141c37b5
-md"""# Defining Generalized Coordinate System
+md"""# Defining the Coordinate System
 
-We will start by defining our coordinate system. We can first do this by determining our Greubler Count. Since this system is 1 body, $N=1$ and thus our Greubler Count is $DOF=3-C$. Since our pendulum has a constant string length of $L$ and must lie in the $x'-y'$ plane, $C=2$ and we have 1 DOF, $\theta(t)$.
+We will start by defining our coordinate systems. The first coordinate system $XYZ$ is the inertial reference frame, with the origin lying at the bottom of the pendulum frame. The second coordinate system $X'Y'Z'$ is defined as the system rotating along with the frame, lying at the top of the segment of the frame going upwards $h_1$.
 
 The angle $\theta(t)$ is relative to the vertical in the rotating frame (i.e. the angle in a traditional pendulum problem)
 
-The angle $\phi(t)$ is the angle at which the pendulum's $x'-z'$ plane is rotated from the positive $x$-axis. Since it is rotating at a constant speed, this angle $\phi$ is not a DOF and $\phi(t) = \Omega t$.
+The angle $\phi(t)$ is the angle at which the pendulum's $X'Y'Z'$ coordinate sytem is rotated relative to the z-axis. 
+
+Since the frame is rotating at a constant speed, this angle $\phi$ is not a DOF and $\phi(t) = \Omega t$.
+
+So we only have $1$ DOF, $\theta$.
 
 """
 
@@ -66,44 +57,35 @@ end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
 md"""
-Relative to the top of the frame in the $x'-y'$ plane, the position of the bob is:
+The position of a particle relative to the inertial reference frame is:
 
-$\vec{r}_{x'-z'} = \begin{bmatrix} L\sin(\theta) \\ -L\cos(\theta)\end{bmatrix}$
+$\vec{r} = \vec{R} + A \vec{u}$
 
-Translating the $x'$ coordinate into $(x, y)$ we get the following position in our generalized coordinates:
+Where $\vec{R}$ is the fixed position vector in the $XYZ$ system, $A$ is the $z$-axis rotation matrix, and $\vec{u}$ is the position vector in the $X'Y'Z'$ coordinate system.
 
-$\vec{r}_{rot} = \begin{bmatrix} L\sin(\theta)\cos(\phi) \\ L\sin(\theta)\sin(\phi) \\ -L\cos(\theta)\end{bmatrix}$
+The only fixed point is the top of the frame, so:
+
+$\vec{R} = \begin{bmatrix} 0 \\ 0 \\ h_1 \end{bmatrix}$
+
+In the $X'Y'Z'$ coordinate system, the pendulum bobs position is:
+
+$\vec{u} = \begin{bmatrix} w_1 + L \sin(\theta) \\ 0 \\ - L \cos(\theta) \end{bmatrix}$
+
+Since we are rotating relative to the $z$-axis, we use the z-axis rotation matrix:
+
+$A = \begin{bmatrix} 
+\cos(\phi) & -\sin(\phi) & 0 \\ 
+\sin(\phi) & \cos(\phi) & 0 \\
+0 & 0 & 1 \end{bmatrix}$
 """
 
-# ╔═╡ cbd246ac-cbc8-4301-b224-87e92f7912b5
-r_rot = [L*sin(θ)*cos(φ) L*sin(θ)*sin(φ) -L*cos(θ)]
-
-# ╔═╡ 89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
-md"""
-The position of the top of the frame is:
-
-$\vec{r}_{x'-z'} = \begin{bmatrix} w_1 \\ h_1 \end{bmatrix}$
-
-Translating the $x'$ coordinate into $(x, y)$ we get the following generalized coordinate:
-
-$\vec{r}_{0} = \begin{bmatrix} w_1\cos(\phi) \\ w_1\sin(\phi) \\ h_1 \end{bmatrix}$
-"""
-
-# ╔═╡ 342f30ae-5a57-4330-8a18-8a9b1eabd74f
-r_0 = [w1*cos(φ) w1*sin(φ) h1]
-
-# ╔═╡ d8d43e4b-a976-4535-a3f0-c2230fd55631
-md"""
-So, the total generalized position vector is then:
-
-$\vec{r} = \vec{r}_{rot}+\vec{r}_0$
-
-$\vec{r} = \begin{bmatrix} w_1\cos(\phi) + L\sin(\theta)\cos(\phi) \\ w_1\sin(\phi) + L\sin(\theta)\sin(\phi) \\ h_1 -L\cos(\theta) \end{bmatrix}$
-
-"""
-
-# ╔═╡ 21a2c22e-99a7-46b5-b898-22028948e114
-r = r_rot + r_0
+# ╔═╡ 4aa26d4b-953f-4f55-8ba7-86e16ef8e788
+begin
+	R = [0; 0; h1]
+	u = [w1+L*sin(θ); 0; -L*cos(θ)]
+	A = [cos(φ) -sin(φ) 0; sin(φ) cos(φ) 0; 0 0 1]
+	r = R + A*u
+end
 
 # ╔═╡ 2c97d2eb-070c-499f-8bbc-9f650953ccd1
 md"""
@@ -117,10 +99,9 @@ For V we choose the plane $z=0$ as our reference point, so that we can use our $
 # ╔═╡ 61500b9e-061e-4412-9fa7-9931ad27bee4
 # defining lagrangian stuff
 begin
-	h = r[3]
 	v = D.(r)
 	T = m/2*sum(v .* v)
-	V = m*g*h
+	V = m*g*r[3]
 	Lag = expand_derivatives(T - V)
 end
 
@@ -3230,16 +3211,11 @@ version = "1.13.0+0"
 
 # ╔═╡ Cell order:
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
-# ╟─e60241b5-d35a-495a-ae92-edb846c41bb8
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
 # ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
-# ╠═cbd246ac-cbc8-4301-b224-87e92f7912b5
-# ╟─89408ad5-0f4f-4bf9-bfaf-5ef3fdf1791d
-# ╠═342f30ae-5a57-4330-8a18-8a9b1eabd74f
-# ╟─d8d43e4b-a976-4535-a3f0-c2230fd55631
-# ╠═21a2c22e-99a7-46b5-b898-22028948e114
+# ╠═4aa26d4b-953f-4f55-8ba7-86e16ef8e788
 # ╟─2c97d2eb-070c-499f-8bbc-9f650953ccd1
 # ╠═61500b9e-061e-4412-9fa7-9931ad27bee4
 # ╟─107838fd-dc24-4b35-bc0f-531cfc6362f2
