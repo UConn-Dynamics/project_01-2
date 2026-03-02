@@ -2,6 +2,3 @@
 
 ## Group Members:
 [Jimmy Padilla](mailto:jpj22002@uconn.edu)
-
-## Project Overview: 
-
