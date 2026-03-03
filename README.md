@@ -2,3 +2,4 @@
 
 ## Group Members:
 [Jimmy Padilla](mailto:jpj22002@uconn.edu)
+[ERic Dillner](eric.dillner@uconn.edu)
