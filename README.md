@@ -5,3 +5,4 @@
 * [Eric Dillner](eric.dillner@uconn.edu)
 * [Jay Yang](jay.yang@uconn.edu)
 * [Colby von Kannewurff](colby.von_kannewurff@uconn.edu)
+* [My Nguyen](my.nguyen@uconn.edu)
