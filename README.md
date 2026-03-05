@@ -6,6 +6,7 @@
 * [Jay Yang](jay.yang@uconn.edu)
 * [Colby von Kannewurff](colby.von_kannewurff@uconn.edu)
 * [My Nguyen](my.nguyen@uconn.edu)
+* [Brice Liew](brice.liew@uconn.edu)
 
 
 # Project_01 - Spinning Pendulum and the Lagrange equations
