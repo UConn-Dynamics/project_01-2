@@ -56,7 +56,7 @@ So we only have $1$ DOF, $\theta$.
 # ╔═╡ 910c7d40-5d28-448e-aaf7-486bb000f478
 # definining variables and basic equations
 begin
-	@parameters L h1 w1 m g Ω ρ Cd Rs
+	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp
 	@independent_variables t
 	@variables θ(t)
 	D = Differential(t)
@@ -169,29 +169,89 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs,Limp,t_imp])
 	sys = structural_simplify(sys)
 end
 
 # ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
 # compute ODE using specified variables
-function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, 
-						   m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0,
-						   tspan=(0.0,10.0), ρ_val=0.0, Cd_val=0.47, Rs_val=0.5)
+function simulate_pendulum(sys; L_val=0.15,
+								g_val=9.8,
+								Ω_val=0.5,
+								m_val=0.1,
+								w1_val=0.1,
+								h1_val=0.2,
+								θ_0=0.5,
+								θ_dot_0=0.0,
+								tspan=(0.0,10.0),
+								ρ_val=0.0,
+								Cd_val=0.47,
+								Rs_val=0.5,
+								Limp_val=0.0,
+								t_imp_val=1.0)
 	
 	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
-	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val, ρ => ρ_val, Cd => Cd_val, Rs => Rs_val)
+	p = Dict(L => L_val,
+			g => g_val,
+			Ω => Ω_val,
+			m => m_val,
+			w1 => w1_val,
+			h1 => h1_val,
+			ρ => ρ_val,
+			Cd => Cd_val,
+			Rs => Rs_val,
+			Limp => Limp_val,
+			t_imp => t_imp_val)
 
+		function condition(u,t,integrator)
+   			 t - t_imp_val
+		end
+
+		function affect!(integrator)
+   			 integrator.u[2] += Limp_val
+		end
+
+		cb = ContinuousCallback(condition, affect!)
+	
 	prob = ODEProblem(sys, merge(u0, p), tspan)
 
-	sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
-
+sol = solve(prob, Tsit5();
+		    callback=cb,
+		    reltol=1e-6,
+		    abstol=1e-8,
+		    saveat=0.0333)
+	
 	return sol, p
 end
 
+# ╔═╡ 6e5ee760-1541-4f5c-af1f-a31a291d38f4
+md"""
+## Impulse Mechanics
+
+An impulse represents a sudden change in momentum occurring over a very short time interval.
+
+The impulse is defined as:
+
+$J = \int F \, dt$
+
+For rotational motion, impulse changes angular momentum:
+
+$J = \Delta L$
+
+For a rigid body:
+
+$\Delta L = I \Delta \omega$
+
+which leads to the change in angular velocity
+
+$\omega(t^+) = \omega(t^-) + \Delta \omega$
+
+In the numerical model this impulse is implemented as an instantaneous increase in angular velocity at $t = 1$ second.
+"""
+
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# 3 cases, no rotation, slow rotation, fast rotation
+# 5 cases, no rotation, slow rotation, fast rotation, drag, impulse 
 begin
 	# no rotation
 	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
@@ -208,6 +268,13 @@ begin
 	# very fast rotation with and without drag
 	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
 	sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; Ω_val=16.0, ρ_val=1.225)
+
+	# drag + impulse case
+    sol_impulse, p_impulse = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
+		# find index where time reaches 1 second
+		idx = findfirst(t -> t ≥ 1.0, sol_impulse.t)
+		# apply impulse (increase angular velocity)
+		sol_impulse[ω_s][idx:end] .+= 3.0
 end
 
 # ╔═╡ 95542217-d27e-49ad-be47-336fa417111d
@@ -218,36 +285,6 @@ To analyze our simulation we can look at the angle the pendulum makes with the v
 
 We do this by firstly graphing the values, then animating the pendulum system.
 """
-
-# ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-begin
-	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)")
-	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)")
-	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)")
-	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
-
-	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
-	plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)")
-	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
-	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg, plot_fast,  plot_very_fast, plot_fast_dg, plot_very_fast_dg; layout=(4,2), size=(1100, 1100))
-end
-
-# ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
-begin
-	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
-	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)")
-	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
-	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
-
-	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
-	plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)")
-	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
-	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg, plot_ω_fast,  plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
-end
 
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
 md"""
@@ -378,6 +415,52 @@ animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum (Very Fast Ro
 
 # ╔═╡ 3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
 animate_pendulum_3d(sol_very_fast_drag, p_very_fast_drag; title="3D Pendulum (Very Fast Rotation + Drag")
+
+# ╔═╡ 1afb4224-a587-42fa-93a4-76c2cb22a8a3
+animate_pendulum_3d(sol_impulse, p_impulse; title="3D Pendulum (Drag + Impulse)")
+
+# ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
+begin
+	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
+	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)")
+	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
+	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
+
+	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
+	plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)")
+	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
+	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
+
+		plot_impulse = Plots.plot(sol_impulse, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Drag + Impulse)")
+	
+	plot(plot_no, plot_slow, plot_fast, plot_very_fast,
+	     plot_no_dg, plot_slow_dg, plot_fast_dg, plot_very_fast_dg,
+	     plot_impulse;
+	     layout=(5,2), size=(1100,1300))
+	
+end
+
+# ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+begin
+	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)")
+	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)")
+	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)")
+	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
+
+	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
+	plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)")
+	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
+	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
+
+		plot_impulse = Plots.plot(sol_impulse, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Drag + Impulse)")
+
+	
+	plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg,
+	     plot_fast, plot_very_fast, plot_fast_dg, plot_very_fast_dg,
+	     plot_impulse;
+	     layout=(5,2), size=(1100,1300))
+
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3311,10 +3394,11 @@ version = "1.13.0+0"
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
+# ╠═6e5ee760-1541-4f5c-af1f-a31a291d38f4
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╟─95542217-d27e-49ad-be47-336fa417111d
-# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╠═fe179a19-87a6-4226-aaa4-b64d510fe233
 # ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
@@ -3325,6 +3409,7 @@ version = "1.13.0+0"
 # ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
 # ╟─a1ef14a4-c382-424c-8a1f-4843bcec9b7f
 # ╟─2c648029-9916-43dd-94b7-219fd5dec97d
-# ╟─3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╠═3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╠═1afb4224-a587-42fa-93a4-76c2cb22a8a3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
