@@ -28,6 +28,16 @@ Your team's goal is to
 
 """
 
+# ╔═╡ 62863f20-5275-4851-acba-53e83652e60a
+function dot_product(a, b) 
+	return sum(a .* b)
+end
+
+# ╔═╡ e98da86e-fd61-4c61-a386-b84b12629a1a
+function magnitude(a) 
+	return sqrt(dot_product(a,a))
+end
+
 # ╔═╡ 91003e71-8208-43d3-93be-dd2c141c37b5
 md"""# Defining the Coordinate System
 
@@ -44,17 +54,15 @@ So we only have $1$ DOF, $\theta$.
 """
 
 # ╔═╡ 910c7d40-5d28-448e-aaf7-486bb000f478
-# definining variables and basic equations.
+# definining variables and basic equations
 begin
-	@parameters L h1 w1 m g Ω dens Cd Rs
+	@parameters L h1 w1 m g Ω ρ Cd Rs
 	@independent_variables t
 	@variables θ(t)
 	D = Differential(t)
 	θ_dot = D(θ)
 	θ_dot_dot = D(D(θ))
 	φ = Ω * t
-	
-
 end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
@@ -82,6 +90,7 @@ $A = \begin{bmatrix}
 """
 
 # ╔═╡ 4aa26d4b-953f-4f55-8ba7-86e16ef8e788
+# computing system kinematics
 begin
 	R = [0; 0; h1]
 	u = [w1+L*sin(θ); 0; -L*cos(θ)]
@@ -91,54 +100,64 @@ end
 
 # ╔═╡ 2c97d2eb-070c-499f-8bbc-9f650953ccd1
 md"""
+# Computing the Path of Least Action
+
 We now compute the Lagrangian $L = T-V$. 
 
-Where $T = \frac{1}{2}m |\vec{\dot{r}}|^2$ and $V = mgh$
+Where $T = \frac{1}{2}m \vec{v} \cdot \vec{v}$ and $V = mgh$
 
 For V we choose the plane $z=0$ as our reference point, so that we can use our $z$ coordinate for h.
 """
 
 # ╔═╡ 61500b9e-061e-4412-9fa7-9931ad27bee4
-# defining lagrangian stuff
+# computing lagrangian
 begin
 	v = D.(r)
-	T = m/2*sum(v .* v)
+	T = m/2*dot_product(v,v)
 	V = m*g*r[3]
 	Lag = expand_derivatives(T - V)
-	
-
-	
-	
 end
 
 # ╔═╡ 107838fd-dc24-4b35-bc0f-531cfc6362f2
 md"""Now with our Lagrangian, we can find the path of least action using the Euler-Lagrange equation:
 
-$\frac{d}{dt}\left( \frac{d L}{d \dot{\theta}} \right) - \frac{d L}{d \theta}= 0$
+$\frac{d}{dt}\left( \frac{d L}{d \dot{\theta}} \right) - \frac{d L}{d \theta}= Q$
+
+Where Q is the component of virtual work by the drag force acting on our DOF, $\theta$.
+
+$Q = \vec{F}_{drag} \cdot \frac{\partial \vec{r}}{\partial \theta}$
+
+For the drag force, we will use the quadratic drag model:
+
+$\vec{F}_{drag} = - k |\vec{v}| \vec{v}$
+
+Where, 
+
+$k = \frac{1}{2} \rho c_d \pi R^2$
 
 """
 
 # ╔═╡ 242302eb-fe7e-4c20-83a2-f5a976fbbac9
-# performing euler-lagrange equation stuff
 begin
+# Euler-Lagrange equation derivatives
 	dL_dθ = Symbolics.derivative(Lag, θ)
 	dL_dθ_dot = Symbolics.derivative(Lag, θ_dot)
-	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ)
 	
 
-# Air Resistance
-	Asphere = Rs^2 *3.14
-	FDrag = -1/2* dens * L^2 * θ_dot * sqrt(θ_dot^2) * Asphere *Cd 	#force Drag
-	Tdrag = FDrag * L #Torque caused by drag
-	el_eqDrag = el_eq + Tdrag
-		
-	sol = simplify(solve_for(el_eqDrag ~ 0, θ_dot_dot))
-	
+# air resistance and generalized virtual work
+	dr_dθ = Symbolics.derivative(r, θ)
+	k = 1/2 * ρ * Cd * pi * Rs^2
+	FDrag = -k*magnitude(v)*v
+	Q = dot_product(FDrag, dr_dθ)
+
+# solving for θ_dot_dot
+	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ - Q)
+	sol = simplify(solve_for(el_eq ~ 0, θ_dot_dot))
 end
 
 # ╔═╡ 93902fe2-5fcd-4f16-8384-9768002d9ee1
 md"""
-To solve this 2nd order ODE, we deconstruct it into a system of 2 1st order ODEs, defining it as an ODESystem object.
+To solve this $2$nd order ODE, we deconstruct it into a system of $2$ $1$st order ODEs, defining it as an ODESystem object.
 """
 
 # ╔═╡ 28406b28-a701-4b46-8620-5df4a5dc70ae
@@ -150,17 +169,19 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,dens,Cd,Rs])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs])
 	sys = structural_simplify(sys)
 end
 
 # ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
 # compute ODE using specified variables
-function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0, tspan=(0.0,10.0),dens_val=1,Cd_val=0,Rs_val=1)
+function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, 
+						   m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0,
+						   tspan=(0.0,10.0), ρ_val=0.0, Cd_val=0.47, Rs_val=0.5)
 	
 	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
-	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val, dens => dens_val, Cd => Cd_val, Rs => Rs_val)
+	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val, ρ => ρ_val, Cd => Cd_val, Rs => Rs_val)
 
 	prob = ODEProblem(sys, merge(u0, p), tspan)
 
@@ -172,40 +193,70 @@ end
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # 3 cases, no rotation, slow rotation, fast rotation
 begin
-	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0,dens_val=1.225,Cd_val=0,Rs_val=0.05) #no rotation
-	
-   	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5,dens_val=1.225,Cd_val=0,Rs_val=0.05)  #slow rotation
-	
-    sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0,dens_val=1.225,Cd_val=0,Rs_val=0.05)  #fast Rotation
-	
-	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0,dens_val=1.225,Cd_val=0,Rs_val=0.05)   # Very Fast Rotation
-	
-	sol_slow_drag, p_slow_drag = simulate_pendulum(sys; Ω_val=0.5,dens_val=1.225,Cd_val=.47,Rs_val=0.05)     #slow rotation w/ Drag
-	
-    sol_fast_drag, p_fast_drag = simulate_pendulum(sys; 	Ω_val=8.0,dens_val=1.225,Cd_val=.47,Rs_val=0.05)         #fast Rotation w/ Drag
-	
-	    sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; 	Ω_val=16.0,dens_val=1.225,Cd_val=.47,Rs_val=0.05)         #very fast Rotation w/ Drag
-	
+	# no rotation
+	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
+	sol_no_drag, p_no_drag = simulate_pendulum(sys; Ω_val=0.0, ρ_val=1.225)
+
+	# slow rotation with and without drag
+   	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
+	sol_slow_drag, p_slow_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
+
+	# fast rotation with and without drag
+    sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0) 
+	sol_fast_drag, p_fast_drag = simulate_pendulum(sys; Ω_val=8.0, ρ_val=1.225)
+
+	# very fast rotation with and without drag
+	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
+	sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; Ω_val=16.0, ρ_val=1.225)
 end
+
+# ╔═╡ 95542217-d27e-49ad-be47-336fa417111d
+md"""
+# Analysis
+
+To analyze our simulation we can look at the angle the pendulum makes with the veritcal over time to see how it changes due to angular speed and drag.
+
+We do this by firstly graphing the values, then animating the pendulum system.
+"""
 
 # ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
 begin
-	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time Without Rotation")
-	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time With Slow Rotation")
-	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time With Fast Rotation")
-	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="Angle vs Time With Fast Rotation w/ drag")
+	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)")
+	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)")
+	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)")
+	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
+
+	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
+	plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)")
+	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
+	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
 	
-	plot(plot_no, plot_slow, plot_fast, plot_fast_dg; layout=(1,4), size=(2000, 500))
+	plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg, plot_fast,  plot_very_fast, plot_fast_dg, plot_very_fast_dg; layout=(4,2), size=(1100, 1100))
 end
 
-# ╔═╡ 1e0bd7c3-ec63-452e-9849-1f9579017f9c
+# ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
 begin
-	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time Without Rotation")
-	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time With Slow Rotation")
-	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time With Fast Rotation")
-	plot_ω_fast_drag = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/sec)", title="Angular Velocity vs Time With Fast Rotation w/ drag")
-	plot(plot_ω_no, plot_ω_slow, plot_ω_fast, plot_ω_fast_drag; layout=(1,4), size=(2000, 500))
+	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
+	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)")
+	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
+	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
+
+	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
+	plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)")
+	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
+	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
+	
+	plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg, plot_ω_fast,  plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
 end
+
+# ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
+md"""
+Notice that the equilibrium angle for the pendulum is non-zero for the fast speeds and zero for the slow speeds. This demonstrates how a high $\omega$ value causes the centripetal acceleration to have largest magnitude, making the pendulum move like a circle. For low $\omega$ values, tangential acceleration is larger, so the pendulum moves around and behaves closer to the standard planar pendulum.
+
+We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle cause by the frame spin.
+
+It looks like below a certain $\omega$ value, the pendulum will oscillate around 0 degrees like in the no and slow rotation cases. Above that value the equilibrium angle approaches $\frac{\pi}{2}$. With drag, the pendulum stops oscillating, and just approaches and stays at the equilibrium value.
+"""
 
 # ╔═╡ 0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 function compute_pendulum_geometry(sol, p)
@@ -250,11 +301,6 @@ function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotat
 	    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
 	    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
 	    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
-
-		
-		# trail_length = 200  # fixed number of recent points
-
-		# start_index = max(1, index - trail_length)
 		
 		trace_x = @view geometry.r_x[1:index]
 		trace_y = @view geometry.r_y[1:index]
@@ -310,25 +356,28 @@ function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotat
 end
 
 # ╔═╡ 9c67720a-bb46-4b57-9a88-898147c0f77e
-animate_pendulum_3d(sol_no, p_no; title="3D Pendulum Without Rotation")
+animate_pendulum_3d(sol_no, p_no; title="3D Pendulum (No Rotation)")
+
+# ╔═╡ c15b6c6f-f25e-4081-a3e0-cced5e163833
+animate_pendulum_3d(sol_no_drag, p_no_drag; title="3D Pendulum (No Rotation + Drag)")
 
 # ╔═╡ 4bf427a3-a066-4abd-8be0-623e9d0aadf8
-animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum With Slow Rotation")
+animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum (Slow Rotation)")
 
 # ╔═╡ c3be3b8d-96cf-425f-92c5-11443245dffe
-animate_pendulum_3d(sol_slow_drag, p_slow_drag; title="3D Pendulum With slow Rotation and drag")
+animate_pendulum_3d(sol_slow_drag, p_slow_drag; title="3D Pendulum (Slow Rotation + Drag)")
 
 # ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
-animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum With Fast Rotation")
+animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum (Fast Rotation)")
 
 # ╔═╡ a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-animate_pendulum_3d(sol_fast_drag, p_fast_drag; title="3D Pendulum With fast Rotation and drag")
+animate_pendulum_3d(sol_fast_drag, p_fast_drag; title="3D Pendulum (Fast Rotation + Drag)")
 
 # ╔═╡ 2c648029-9916-43dd-94b7-219fd5dec97d
-animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum With Very Fast Rotation")
+animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum (Very Fast Rotation)")
 
 # ╔═╡ 3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
-animate_pendulum_3d(sol_very_fast_drag, p_very_fast_drag; title="3D Pendulum With slow Rotation and drag")
+animate_pendulum_3d(sol_very_fast_drag, p_very_fast_drag; title="3D Pendulum (Very Fast Rotation + Drag")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -351,7 +400,7 @@ Symbolics = "~7.8.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.4"
 manifest_format = "2.0"
 project_hash = "519c4d981c804d986924ec2e52cddd4be394ac21"
 
@@ -3249,6 +3298,8 @@ version = "1.13.0+0"
 # ╔═╡ Cell order:
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
+# ╟─62863f20-5275-4851-acba-53e83652e60a
+# ╟─e98da86e-fd61-4c61-a386-b84b12629a1a
 # ╟─91003e71-8208-43d3-93be-dd2c141c37b5
 # ╠═910c7d40-5d28-448e-aaf7-486bb000f478
 # ╟─e28f72c0-7df2-4029-ab2a-4f21f2bade62
@@ -3259,18 +3310,21 @@ version = "1.13.0+0"
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
-# ╟─44d9e415-a7ac-431c-a72e-0d4392b2e629
+# ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╠═1e0bd7c3-ec63-452e-9849-1f9579017f9c
+# ╟─95542217-d27e-49ad-be47-336fa417111d
+# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
 # ╟─9c67720a-bb46-4b57-9a88-898147c0f77e
+# ╟─c15b6c6f-f25e-4081-a3e0-cced5e163833
 # ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
-# ╠═c3be3b8d-96cf-425f-92c5-11443245dffe
+# ╟─c3be3b8d-96cf-425f-92c5-11443245dffe
 # ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
-# ╠═a1ef14a4-c382-424c-8a1f-4843bcec9b7f
+# ╟─a1ef14a4-c382-424c-8a1f-4843bcec9b7f
 # ╟─2c648029-9916-43dd-94b7-219fd5dec97d
-# ╠═3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╟─3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
