@@ -5,6 +5,9 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 0d9be664-d7c5-4084-add2-25e5418742d6
+# Import the required Julia packages.
+# These libraries allow us to perform symbolic math,
+# build differential equation systems, and visualize results.
 using Symbolics, ModelingToolkit, DifferentialEquations, Plots, Latexify
 
 # ╔═╡ f17103ea-06bf-11f1-a2b0-79e68ed152eb
@@ -55,13 +58,27 @@ So we only have $1$ DOF, $\theta$.
 
 # ╔═╡ 910c7d40-5d28-448e-aaf7-486bb000f478
 # definining variables and basic equations
+# These represent the physical properties of the pendulum system.
 begin
+	# L  = pendulum length
+	# h1 = vertical height of the frame
+	# w1 = horizontal offset of pivot
+	# m  = mass of pendulum bob
+	# g  = gravitational acceleration
+	# Ω  = angular rotation speed of the frame
+	# ρ  = air density
+	# Cd = drag coefficient
+	# Rs = radius of pendulum bob
 	@parameters L h1 w1 m g Ω ρ Cd Rs
+	# Define time as the independent variable.
 	@independent_variables t
+	# θ(t) is the pendulum angle relative to the vertical direction.
 	@variables θ(t)
 	D = Differential(t)
 	θ_dot = D(θ)
 	θ_dot_dot = D(D(θ))
+	# The frame rotates at constant angular velocity Ω,
+	# so the rotation angle is φ = Ωt.
 	φ = Ω * t
 end
 
@@ -92,9 +109,15 @@ $A = \begin{bmatrix}
 # ╔═╡ 4aa26d4b-953f-4f55-8ba7-86e16ef8e788
 # computing system kinematics
 begin
+	# Position of the pivot point in the inertial reference frame.
 	R = [0; 0; h1]
+	# Position of the pendulum mass relative to the rotating frame.
 	u = [w1+L*sin(θ); 0; -L*cos(θ)]
+	# Rotation matrix that transforms coordinates
+	# from the rotating frame to the inertial frame.
 	A = [cos(φ) -sin(φ) 0; sin(φ) cos(φ) 0; 0 0 1]
+	# Total position vector of the pendulum mass
+	# expressed in the inertial coordinate system.
 	r = R + A*u
 end
 
@@ -112,9 +135,14 @@ For V we choose the plane $z=0$ as our reference point, so that we can use our $
 # ╔═╡ 61500b9e-061e-4412-9fa7-9931ad27bee4
 # computing lagrangian
 begin
+	# Compute velocity by differentiating position with respect to time.
 	v = D.(r)
+	# Kinetic energy of the pendulum mass.
+	# T = 1/2 m v^2
 	T = m/2*dot_product(v,v)
+	# Gravitational potential energy based on the vertical position.
 	V = m*g*r[3]
+	# Define the Lagrangian of the system: L = T - V.
 	Lag = expand_derivatives(T - V)
 end
 
@@ -140,18 +168,22 @@ $k = \frac{1}{2} \rho c_d \pi R^2$
 # ╔═╡ 242302eb-fe7e-4c20-83a2-f5a976fbbac9
 begin
 # Euler-Lagrange equation derivatives
+	# Compute derivatives needed for the Euler Lagrange equation.
 	dL_dθ = Symbolics.derivative(Lag, θ)
 	dL_dθ_dot = Symbolics.derivative(Lag, θ_dot)
 	
 
 # air resistance and generalized virtual work
 	dr_dθ = Symbolics.derivative(r, θ)
+	# Constant used in the quadratic drag force model.
 	k = 1/2 * ρ * Cd * pi * Rs^2
+	# Aerodynamic drag force acting opposite to velocity.
 	FDrag = -k*magnitude(v)*v
 	Q = dot_product(FDrag, dr_dθ)
 
 # solving for θ_dot_dot
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ - Q)
+	# Solve the Euler Lagrange equation for angular acceleration θ¨.
 	sol = simplify(solve_for(el_eq ~ 0, θ_dot_dot))
 end
 
@@ -400,7 +432,7 @@ Symbolics = "~7.8.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.4"
+julia_version = "1.12.5"
 manifest_format = "2.0"
 project_hash = "519c4d981c804d986924ec2e52cddd4be394ac21"
 
