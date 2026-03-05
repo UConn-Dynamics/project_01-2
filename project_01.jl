@@ -56,7 +56,7 @@ So we only have $1$ DOF, $\theta$.
 # ╔═╡ 910c7d40-5d28-448e-aaf7-486bb000f478
 # definining variables and basic equations
 begin
-	@parameters L h1 w1 m g Ω ρ Cd Rs
+	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp
 	@independent_variables t
 	@variables θ(t)
 	D = Differential(t)
@@ -169,32 +169,92 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs,Limp,t_imp])
 	sys = structural_simplify(sys)
 end
 
 # ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
 # compute ODE using specified variables
-function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, 
-						   m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0,
-						   tspan=(0.0,10.0), ρ_val=0.0, Cd_val=0.47, Rs_val=0.5)
+function simulate_pendulum(sys; L_val=0.15,
+								g_val=9.8,
+								Ω_val=0.5,
+								m_val=0.1,
+								w1_val=0.1,
+								h1_val=0.2,
+								θ_0=0.5,
+								θ_dot_0=0.0,
+								tspan=(0.0,10.0),
+								ρ_val=0.0,
+								Cd_val=0.47,
+								Rs_val=0.5,
+								Limp_val=0.0,
+								t_imp_val=1.0)
 	
 	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
-	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val, ρ => ρ_val, Cd => Cd_val, Rs => Rs_val)
+	p = Dict(L => L_val,
+			g => g_val,
+			Ω => Ω_val,
+			m => m_val,
+			w1 => w1_val,
+			h1 => h1_val,
+			ρ => ρ_val,
+			Cd => Cd_val,
+			Rs => Rs_val,
+			Limp => Limp_val,
+			t_imp => t_imp_val)
 
+		function condition(u,t,integrator)
+   			 t - t_imp_val
+		end
+
+		function affect!(integrator)
+   			 integrator.u[2] += Limp_val
+		end
+
+		cb = ContinuousCallback(condition, affect!)
+	
 	prob = ODEProblem(sys, merge(u0, p), tspan)
 
-	sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
-
+sol = solve(prob, Tsit5();
+		    callback=cb,
+		    reltol=1e-6,
+		    abstol=1e-8,
+		    saveat=0.0333)
+	
 	return sol, p
 end
 
+# ╔═╡ 6e5ee760-1541-4f5c-af1f-a31a291d38f4
+md"""
+## Impulse Mechanics
+
+An impulse represents a sudden change in momentum occurring over a very short time interval.
+
+The impulse is defined as:
+
+$J = \int F \, dt$
+
+For rotational motion, impulse changes angular momentum:
+
+$J = \Delta L$
+
+For a rigid body:
+
+$\Delta L = I \Delta \omega$
+
+which leads to the change in angular velocity
+
+$\omega(t^+) = \omega(t^-) + \Delta \omega$
+
+In the numerical model this impulse is implemented as an instantaneous increase in angular velocity at $t = 1$ second.
+"""
+
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# 3 cases, no rotation, slow rotation, fast rotation
+# 5 cases, no rotation, slow rotation, fast rotation, drag, impulse 
 begin
 	# no rotation
-	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
+	sol_no = simulate_pendulum(sys; Ω_val=0.0)
 	sol_no_drag, p_no_drag = simulate_pendulum(sys; Ω_val=0.0, ρ_val=1.225)
 
 	# slow rotation with and without drag
@@ -208,6 +268,9 @@ begin
 	# very fast rotation with and without drag
 	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
 	sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; Ω_val=16.0, ρ_val=1.225)
+
+	# drag + impulse case
+   # sol_impulse, p_impulse = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
 end
 
 # ╔═╡ 95542217-d27e-49ad-be47-336fa417111d
@@ -3311,6 +3374,7 @@ version = "1.13.0+0"
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
+# ╠═6e5ee760-1541-4f5c-af1f-a31a291d38f4
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╟─95542217-d27e-49ad-be47-336fa417111d
 # ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
