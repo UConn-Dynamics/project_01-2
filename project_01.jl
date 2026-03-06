@@ -8,7 +8,7 @@ using InteractiveUtils
 # Import the required Julia packages.
 # These libraries allow us to perform symbolic math,
 # build differential equation systems, and visualize results.
-using Symbolics, ModelingToolkit, DifferentialEquations, Plots, Latexify
+using Symbolics, ModelingToolkit, DifferentialEquations, Plots, Latexify, DiffEqCallbacks, Printf
 
 # ╔═╡ f17103ea-06bf-11f1-a2b0-79e68ed152eb
 md"""# Project_01 - Spinning Pendulum and the Lagrange equations
@@ -69,8 +69,10 @@ begin
 	# ρ  = air density
 	# Cd = drag coefficient
 	# Rs = radius of pendulum bob
-	# c = damping coefficient representing hinge friction or a damper
-	@parameters L h1 w1 m g Ω ρ Cd Rs c
+	# Limp = ?
+	# t_imp = ?
+  # c = ?
+	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp c
 	# Define time as the independent variable.
 	@independent_variables t
 	# θ(t) is the pendulum angle relative to the vertical direction.
@@ -207,28 +209,88 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1, ρ, Cd, Rs, c])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs,Limp,t_imp, c])
 	sys = structural_simplify(sys)
 end
 
+# ╔═╡ 6e5ee760-1541-4f5c-af1f-a31a291d38f4
+md"""
+## Impulse Mechanics
+
+An impulse represents a sudden change in momentum occurring over a very short time interval.
+
+The impulse is defined as:
+
+$J = \int F \, dt$
+
+For rotational motion, impulse changes angular momentum:
+
+$J = \Delta L$
+
+For a rigid body:
+
+$\Delta L = I \Delta \omega$
+
+which leads to the change in angular velocity
+
+$\omega(t^+) = \omega(t^-) + \Delta \omega$
+
+In the numerical model this impulse is implemented as an instantaneous increase in angular velocity at $t = 1$ second.
+"""
+
 # ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
 # compute ODE using specified variables
-function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5,
-                           m_val=0.1, w1_val=0.1, h1_val=0.2,
-                           θ_0=0.5, θ_dot_0=0.0, tspan=(0.0,10.0),
-                           ρ_val=0.0, Cd_val=0.47, Rs_val=0.5, c_val=0.02)
-    u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
-    p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val,
-             w1 => w1_val, h1 => h1_val, ρ => ρ_val,
-             Cd => Cd_val, Rs => Rs_val,
-             c => c_val)  # <<< Add this line
-    prob = ODEProblem(sys, merge(u0, p), tspan)
-    sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
-    return sol, p
+function simulate_pendulum(sys; L_val=0.15,
+								g_val=9.8,
+								Ω_val=0.5,
+								m_val=0.1,
+								w1_val=0.1,
+								h1_val=0.2,
+								θ_0=0.5,
+								θ_dot_0=0.0,
+								tspan=(0.0,10.0),
+								ρ_val=0.0,
+								Cd_val=0.47,
+								Rs_val=0.5,
+								Limp_val=0.0,
+								t_imp_val=1.0,
+                c_val=0.0)
+	
+	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
+
+	p = Dict(L => L_val,
+			g => g_val,
+			Ω => Ω_val,
+			m => m_val,
+			w1 => w1_val,
+			h1 => h1_val,
+			ρ => ρ_val,
+			Cd => Cd_val,
+			Rs => Rs_val,
+			Limp => Limp_val,
+			t_imp => t_imp_val,
+      c => c_val)
+
+	function affect!(integrator)
+		# putting a negative sign here caused the impulse to look better, there might be a sign error somewhere.
+		integrator.u[2] += Limp_val
+	end
+
+	cb = PresetTimeCallback(t_imp_val, affect!)
+	
+	prob = ODEProblem(sys, merge(u0, p), tspan)
+
+	sol = solve(prob, Tsit5();
+			    callback=cb,
+			    reltol=1e-6,
+			    abstol=1e-8,
+			    saveat=0.0333)
+	
+	return sol, p
 end
 
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# 3 cases, no rotation, slow rotation, fast rotation
+# 10 cases, no rotation, slow rotation, fast rotation, very fast rotation, slow with impulse, and all previous with drag. 
 begin
 	# no rotation
 	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
@@ -248,52 +310,95 @@ begin
 	# very fast rotation with and without drag
 	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
 	sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; Ω_val=16.0, ρ_val=1.225)
+
+	# impulse with and without drag
+    sol_impulse, p_impulse = simulate_pendulum(sys; Ω_val=0.5, Limp_val=1.0)
+	sol_impulse_drag, p_impulse_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225, Limp_val=1.0)
 end
 
 # ╔═╡ 95542217-d27e-49ad-be47-336fa417111d
 md"""
 # Analysis
 
-To analyze our simulation we can look at the angle the pendulum makes with the veritcal over time to see how it changes due to angular speed and drag.
+To analyze our simulation we can look at the angle the pendulum makes with the vertical over time to see how it changes due to angular speed and drag.
 
 We do this by firstly graphing the values, then animating the pendulum system.
 """
 
-# ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-begin
-	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)")
-	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)")
-	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)")
-	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
-
-	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
-	plot_slow_dg = Plots.plot(sol_slow_drag_damp, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag + Damping)")
-	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
-	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg, plot_fast,  plot_very_fast, plot_fast_dg, plot_very_fast_dg; layout=(4,2), size=(1100, 1100))
-end
-
 # ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
 begin
-	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
-	plot_ω_slow_dg_damp = Plots.plot(sol_slow_drag_damp, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag + Damping)")
-	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
-	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
+    anim_theta = @animate for i in 1:2:length(sol_no.t)
 
-	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
-	plot_slow_dg_damp = Plots.plot(sol_slow_drag_damp, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag + Damping)")
-	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
-	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_ω_no, plot_ω_slow_dg_damp, plot_ω_no_dg, plot_ω_slow_dg_damp, plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
+		plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_no, [sol_no.t[i]], [sol_no[θ_s][i]], markersize=5, label="")
+		plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_slow, [sol_slow.t[i]], [sol_slow[θ_s][i]], markersize=5, label="")
+		plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_fast, [sol_fast.t[i]], [sol_fast[θ_s][i]], markersize=5, label="")
+		plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_very_fast, [sol_very_fast.t[i]], [sol_very_fast[θ_s][i]], markersize=5, label="")
+		plot_impulse = Plots.plot(sol_impulse, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow + Impulse)", label="θ_s", legend=:topright)
+		scatter!(plot_impulse, [sol_impulse.t[i]], [sol_impulse[θ_s][i]], markersize=5, label="")
+
+		plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_no_dg, [sol_no_drag.t[i]], [sol_no_drag[θ_s][i]], markersize=5, label="")
+		plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_slow_dg, [sol_slow_drag.t[i]], [sol_slow_drag[θ_s][i]], markersize=5, label="")
+		plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_fast_dg, [sol_fast_drag.t[i]], [sol_fast_drag[θ_s][i]], markersize=5, label="")
+		plot_very_fast_dg = Plots.plot(sol_very_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[θ_s][i]], markersize=5, label="")
+		plot_impulse_dg = Plots.plot(sol_impulse_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow + Impulse + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_impulse_dg, [sol_impulse_drag.t[i]], [sol_impulse_drag[θ_s][i]], markersize=5, label="")
+
+        plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg,
+             plot_fast, plot_very_fast, plot_fast_dg, plot_very_fast_dg,
+			 plot_impulse, plot_impulse_dg;
+             layout=(5,2), size=(1100,1100), legend=false)
+    end
+
+    gif(anim_theta, "pendulum_theta_animation.gif", fps=14)
+end
+
+# ╔═╡ 85742128-ab2c-48b7-ac8b-0c313de61dbd
+begin
+	anim_omega = @animate for i in 1:2:length(sol_no.t)
+		plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_no, [sol_no.t[i]], [sol_no[ω_s][i]], markersize=5, label="")
+		plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_slow, [sol_slow.t[i]], [sol_slow[ω_s][i]], markersize=5, label="")
+		plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_fast, [sol_fast.t[i]], [sol_fast[ω_s][i]], markersize=5, label="")
+		plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_very_fast, [sol_very_fast.t[i]], [sol_very_fast[ω_s][i]], markersize=5, label="")
+		plot_ω_impulse = Plots.plot(sol_impulse, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow + Impulse)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_impulse, [sol_impulse.t[i]], [sol_impulse[ω_s][i]], markersize=5, label="")
+
+		plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_no_dg, [sol_no_drag.t[i]], [sol_no_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_slow_dg, [sol_slow_drag.t[i]], [sol_slow_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_fast_dg, [sol_fast_drag.t[i]], [sol_fast_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_very_fast_dg = Plots.plot(sol_very_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_impulse_dg = Plots.plot(sol_impulse_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow + Impulse + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_impulse_dg, [sol_impulse_drag.t[i]], [sol_impulse_drag[ω_s][i]], markersize=5, label="")
+
+		plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg,
+             plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg,
+			 plot_ω_impulse, plot_ω_impulse_dg;
+             layout=(5,2), size=(1100,1100), legend=false)
+	end
+
+    gif(anim_omega, "pendulum_omega_animation.gif", fps=14)
 end
 
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
 md"""
 Notice that the equilibrium angle for the pendulum is non-zero for the fast speeds and zero for the slow speeds. This demonstrates how a high $\omega$ value causes the centripetal acceleration to have largest magnitude, making the pendulum move like a circle. For low $\omega$ values, tangential acceleration is larger, so the pendulum moves around and behaves closer to the standard planar pendulum.
 
-We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle cause by the frame spin.
+We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle caused by the frames spinning.
 
 It looks like below a certain $\omega$ value, the pendulum will oscillate around 0 degrees like in the no and slow rotation cases. Above that value the equilibrium angle approaches $\frac{\pi}{2}$. With drag, the pendulum stops oscillating, and just approaches and stays at the equilibrium value.
 """
@@ -322,113 +427,114 @@ function compute_pendulum_geometry(sol, p)
 	return (; t_vals, r_x, r_y, r_z, frame_top_x_values, frame_top_y_values, frame_top_z_values, max_radius, h_val, L_val)
 end
 
-# ╔═╡ fcd29939-01e8-42ae-8fef-f70ca60eebef
-function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotating Frame", filename = "pendulum_3d.gif", fps=30)
-	geometry = compute_pendulum_geometry(solution, parameters)
+# ╔═╡ db75c6d6-73af-4521-af8c-57fcf9603c92
+function pendulum_frame(geometry, index; title="")
+    vertical_x = [0.0, 0.0]
+    vertical_y = [0.0, 0.0]
+    vertical_z = [0.0, geometry.h_val]
 
-	pendulum_animation = @animate for index in eachindex(geometry.t_vals)
-	    # Static vertical frame: from (0,0,0) up to (0,0,h1)
-	    vertical_x = [0.0, 0.0]
-	    vertical_y = [0.0, 0.0]
-	    vertical_z = [0.0, geometry.h_val]
-	
-	    # Rotating horizontal arm: from top of frame to moving pivot
-	    arm_x = [0.0, geometry.frame_top_x_values[index]]
-	    arm_y = [0.0, geometry.frame_top_y_values[index]]
-	    arm_z = [geometry.h_val, geometry.frame_top_z_values[index]]
-	
-	    # Pendulum rod: from moving pivot to bob
-	    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
-	    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
-	    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
-		
-		trace_x = @view geometry.r_x[1:index]
-		trace_y = @view geometry.r_y[1:index]
-		trace_z = @view geometry.r_z[1:index]
-		
-		plot3d(
-			trace_x, trace_y, trace_z;
-			label      = "Trace",
-			linestyle  = :dot,
-			linecolor  = :blue,
-			linewidth  = 2,
-			xlim       = (-geometry.max_radius, geometry.max_radius),
-			ylim       = (-geometry.max_radius, geometry.max_radius),
-			zlim       = (0.0, geometry.h_val + geometry.L_val + 0.1),
-			aspect_ratio = :equal,
-			xlabel     = "x",
-			ylabel     = "y",
-			zlabel     = "z",
-			title      = title * " (t = $(round(geometry.t_vals[index]; digits = 2)) s)",
-			legend = false,
-		)
+    arm_x = [0.0, geometry.frame_top_x_values[index]]
+    arm_y = [0.0, geometry.frame_top_y_values[index]]
+    arm_z = [geometry.h_val, geometry.frame_top_z_values[index]]
 
-	
-	    plot3d!(
-	        rod_x, rod_y, rod_z,
-			label     = "Pendulum Rod",
-	        linecolor = :green,
-	        linewidth = 3,
-	    )
+    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
+    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
+    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
 
-		scatter3d!([geometry.r_x[index]], [geometry.r_y[index]], [geometry.r_z[index]],
-	        label       = "Bob",
-	        markercolor = :red,
-	        markersize  = 6,
-	    )
-	
-	    plot3d!(vertical_x, vertical_y, vertical_z,
-	        label        = "Frame",
-	        linecolor    = :black,
-	        linewidth    = 3,
-	    )
-	
-	    plot3d!(arm_x, arm_y, arm_z,
-			label     = "Rotating Arm",
-			linecolor = :black,
-			linewidth = 3,
-	    )
-	
-	    
-	end
+    trace_x = @view geometry.r_x[1:index]
+    trace_y = @view geometry.r_y[1:index]
+    trace_z = @view geometry.r_z[1:index]
 
-	gif(pendulum_animation, filename, fps=30)
+    p = plot3d(
+        trace_x, trace_y, trace_z;
+        linestyle=:dot,
+        linecolor=:blue,
+        linewidth=2,
+        xlim=(-geometry.max_radius, geometry.max_radius),
+        ylim=(-geometry.max_radius, geometry.max_radius),
+        zlim=(0.0, geometry.h_val + geometry.L_val + 0.1),
+        aspect_ratio=:equal,
+        axis=true,
+        title=title,
+        legend=false,
+		margin=-5Plots.mm
+    )
+
+    plot3d!(p, rod_x, rod_y, rod_z, linecolor=:green, linewidth=3)
+    scatter3d!(p, [geometry.r_x[index]], [geometry.r_y[index]], [geometry.r_z[index]], markercolor=:red, markersize=6)
+
+    plot3d!(p, vertical_x, vertical_y, vertical_z, linecolor=:black, linewidth=3)
+    plot3d!(p, arm_x, arm_y, arm_z, linecolor=:black, linewidth=3)
+
+    return p
 end
 
-# ╔═╡ 9c67720a-bb46-4b57-9a88-898147c0f77e
-animate_pendulum_3d(sol_no, p_no; title="3D Pendulum (No Rotation)")
+# ╔═╡ 7d72e478-295d-4465-b48b-5e9bcaa137a8
+begin
+	geo_no = compute_pendulum_geometry(sol_no, p_no)
+	geo_slow = compute_pendulum_geometry(sol_slow, p_slow)
+	geo_fast = compute_pendulum_geometry(sol_fast, p_fast)
+	geo_very_fast = compute_pendulum_geometry(sol_very_fast, p_very_fast)
+	
+	geo_no_drag = compute_pendulum_geometry(sol_no_drag, p_no_drag)
+	geo_slow_drag = compute_pendulum_geometry(sol_slow_drag, p_slow_drag)
+	geo_fast_drag = compute_pendulum_geometry(sol_fast_drag, p_fast_drag)
+	geo_very_fast_drag = compute_pendulum_geometry(sol_very_fast_drag, p_very_fast_drag)
 
-# ╔═╡ c15b6c6f-f25e-4081-a3e0-cced5e163833
-animate_pendulum_3d(sol_no_drag, p_no_drag; title="3D Pendulum (No Rotation + Drag)")
+	geo_impulse = compute_pendulum_geometry(sol_impulse, p_impulse)
+	geo_impulse_drag = compute_pendulum_geometry(sol_impulse_drag, p_impulse_drag)
+end
 
-# ╔═╡ 4bf427a3-a066-4abd-8be0-623e9d0aadf8
-animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum (Slow Rotation)")
+# ╔═╡ c340c3d9-db37-4612-b0dc-2ab39a0d402a
+begin
+	anim = @animate for i in 1:length(geo_no.t_vals)
 
-# ╔═╡ c3be3b8d-96cf-425f-92c5-11443245dffe
-animate_pendulum_3d(sol_slow_drag_damp, p_slow_drag_damp; title="3D Pendulum (Slow Rotation + Drag + Damping)")
-
-# ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
-animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum (Fast Rotation)")
-
-# ╔═╡ a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-animate_pendulum_3d(sol_fast_drag, p_fast_drag; title="3D Pendulum (Fast Rotation + Drag)")
-
-# ╔═╡ 2c648029-9916-43dd-94b7-219fd5dec97d
-animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum (Very Fast Rotation)")
-
-# ╔═╡ 3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
-animate_pendulum_3d(sol_very_fast_drag, p_very_fast_drag; title="3D Pendulum (Very Fast Rotation + Drag")
+		t_now = 0.0333 * i
+		t_str = @sprintf("(t = %.2f s)", t_now)
+	
+		p1  = pendulum_frame(geo_no, i, title="No Rotation $t_str")
+		p2  = pendulum_frame(geo_slow, i, title="Slow Rotation $t_str")
+		p3  = pendulum_frame(geo_no_drag, i, title="No Rotation + Drag $t_str")
+		p4  = pendulum_frame(geo_slow_drag, i, title="Slow Rotation + Drag $t_str")
+		
+		p5  = pendulum_frame(geo_fast, i, title="Fast Rotation $t_str")
+		p6  = pendulum_frame(geo_very_fast, i, title="Very Fast Rotation $t_str")
+		p7  = pendulum_frame(geo_fast_drag, i, title="Fast Rotation + Drag $t_str")
+		p8  = pendulum_frame(geo_very_fast_drag, i, title="Very Fast Rotation + Drag $t_str")
+		
+		p9  = pendulum_frame(geo_impulse, i, title="Impulse $t_str")
+		p10 = pendulum_frame(geo_impulse_drag, i, title="Impulse + Drag $t_str")
+			
+		l = @layout [a b;
+					 c d;
+					 e f;
+					 g h;
+					 i j]
+		
+	    plot(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10;
+		     layout=l,
+		     size=(900,1500),
+		     margin = -5Plots.mm,
+			 subplot_padding = 0
+		)
+	end
+	
+	gif(anim,"pendulum_grid.gif",fps=30)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
+DiffEqCallbacks = "~4.12.0"
 DifferentialEquations = "~7.17.0"
 Latexify = "~0.16.10"
 ModelingToolkit = "~11.7.2"
@@ -440,9 +546,9 @@ Symbolics = "~7.8.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "519c4d981c804d986924ec2e52cddd4be394ac21"
+project_hash = "d435fef62af40731c521e9120feda80891f425c3"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -3350,21 +3456,16 @@ version = "1.13.0+0"
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
+# ╟─6e5ee760-1541-4f5c-af1f-a31a291d38f4
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╟─95542217-d27e-49ad-be47-336fa417111d
-# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╠═fe179a19-87a6-4226-aaa4-b64d510fe233
-# ╠═9824e8cc-fddc-413d-81e1-a60bc8aeed40
+# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╟─85742128-ab2c-48b7-ac8b-0c313de61dbd
+# ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
-# ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
-# ╠═c15b6c6f-f25e-4081-a3e0-cced5e163833
-# ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
-# ╠═c3be3b8d-96cf-425f-92c5-11443245dffe
-# ╠═7f52e3e0-5691-4093-a9dc-af84bdd368fc
-# ╠═a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-# ╠═2c648029-9916-43dd-94b7-219fd5dec97d
-# ╠═3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╟─db75c6d6-73af-4521-af8c-57fcf9603c92
+# ╠═7d72e478-295d-4465-b48b-5e9bcaa137a8
+# ╠═c340c3d9-db37-4612-b0dc-2ab39a0d402a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
