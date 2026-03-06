@@ -1,6 +1,9 @@
 # **ME 5180: Advanced Dynamics | Project 01 | Group 02**
+# Runtime Metric:
+* I have a Intel Core i9-9900K CPU @ 3.60 GHz and the project_01.jl file runs in Pluto in 470s (~7.83 minutes)
+* This is likely because we incorporated 2 different kinds of generalized resistive forces, drag and dampening from pivot friction.
 
-## Group Members:
+# Group Members:
 * [Jimmy Padilla](mailto:jpj22002@uconn.edu)
 * [Eric Dillner](eric.dillner@uconn.edu)
 * [Jay Yang](jay.yang@uconn.edu)
