@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.23
+# v0.20.21
 
 using Markdown
 using InteractiveUtils
@@ -246,7 +246,7 @@ end
 md"""
 # Analysis
 
-To analyze our simulation we can look at the angle the pendulum makes with the veritcal over time to see how it changes due to angular speed and drag.
+To analyze our simulation we can look at the angle the pendulum makes with the vertical over time to see how it changes due to angular speed and drag.
 
 We do this by firstly graphing the values, then animating the pendulum system.
 """
@@ -275,7 +275,7 @@ begin
 
         plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg,
              plot_fast, plot_very_fast, plot_fast_dg, plot_very_fast_dg;
-             layout=(4,2), size=(1100,1100))
+             layout=(4,2), size=(1100,1100), legend=false)
     end
 
     gif(anim_theta, "pendulum_theta_animation.gif", fps=14)
@@ -304,23 +304,17 @@ begin
 
 		plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg,
              plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg;
-             layout=(4,2), size=(1100,1100))
+             layout=(4,2), size=(1100,1100), legend=false)
 	end
 
     gif(anim_omega, "pendulum_omega_animation.gif", fps=14)
 end
 
-# ╔═╡ 28a21542-acec-4c47-afad-fe2ce71023b2
-# ╠═╡ disabled = true
-#=╠═╡
-
-  ╠═╡ =#
-
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
 md"""
 Notice that the equilibrium angle for the pendulum is non-zero for the fast speeds and zero for the slow speeds. This demonstrates how a high $\omega$ value causes the centripetal acceleration to have largest magnitude, making the pendulum move like a circle. For low $\omega$ values, tangential acceleration is larger, so the pendulum moves around and behaves closer to the standard planar pendulum.
 
-We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle cause by the frame spin.
+We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle caused by the frames spinning.
 
 It looks like below a certain $\omega$ value, the pendulum will oscillate around 0 degrees like in the no and slow rotation cases. Above that value the equilibrium angle approaches $\frac{\pi}{2}$. With drag, the pendulum stops oscillating, and just approaches and stays at the equilibrium value.
 """
@@ -349,102 +343,89 @@ function compute_pendulum_geometry(sol, p)
 	return (; t_vals, r_x, r_y, r_z, frame_top_x_values, frame_top_y_values, frame_top_z_values, max_radius, h_val, L_val)
 end
 
-# ╔═╡ fcd29939-01e8-42ae-8fef-f70ca60eebef
-function animate_pendulum_3d(solution, parameters; title = "3D Pendulum on Rotating Frame", filename = "pendulum_3d.gif", fps=30)
-	geometry = compute_pendulum_geometry(solution, parameters)
+# ╔═╡ db75c6d6-73af-4521-af8c-57fcf9603c92
+function pendulum_frame(geometry, index; title="")
+    vertical_x = [0.0, 0.0]
+    vertical_y = [0.0, 0.0]
+    vertical_z = [0.0, geometry.h_val]
 
-	pendulum_animation = @animate for index in eachindex(geometry.t_vals)
-	    # Static vertical frame: from (0,0,0) up to (0,0,h1)
-	    vertical_x = [0.0, 0.0]
-	    vertical_y = [0.0, 0.0]
-	    vertical_z = [0.0, geometry.h_val]
-	
-	    # Rotating horizontal arm: from top of frame to moving pivot
-	    arm_x = [0.0, geometry.frame_top_x_values[index]]
-	    arm_y = [0.0, geometry.frame_top_y_values[index]]
-	    arm_z = [geometry.h_val, geometry.frame_top_z_values[index]]
-	
-	    # Pendulum rod: from moving pivot to bob
-	    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
-	    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
-	    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
-		
-		trace_x = @view geometry.r_x[1:index]
-		trace_y = @view geometry.r_y[1:index]
-		trace_z = @view geometry.r_z[1:index]
-		
-		plot3d(
-			trace_x, trace_y, trace_z;
-			label      = "Trace",
-			linestyle  = :dot,
-			linecolor  = :blue,
-			linewidth  = 2,
-			xlim       = (-geometry.max_radius, geometry.max_radius),
-			ylim       = (-geometry.max_radius, geometry.max_radius),
-			zlim       = (0.0, geometry.h_val + geometry.L_val + 0.1),
-			aspect_ratio = :equal,
-			xlabel     = "x",
-			ylabel     = "y",
-			zlabel     = "z",
-			title      = title * " (t = $(round(geometry.t_vals[index]; digits = 2)) s)",
-			legend = false,
-		)
+    arm_x = [0.0, geometry.frame_top_x_values[index]]
+    arm_y = [0.0, geometry.frame_top_y_values[index]]
+    arm_z = [geometry.h_val, geometry.frame_top_z_values[index]]
 
-	
-	    plot3d!(
-	        rod_x, rod_y, rod_z,
-			label     = "Pendulum Rod",
-	        linecolor = :green,
-	        linewidth = 3,
-	    )
+    rod_x = [geometry.frame_top_x_values[index], geometry.r_x[index]]
+    rod_y = [geometry.frame_top_y_values[index], geometry.r_y[index]]
+    rod_z = [geometry.frame_top_z_values[index], geometry.r_z[index]]
 
-		scatter3d!([geometry.r_x[index]], [geometry.r_y[index]], [geometry.r_z[index]],
-	        label       = "Bob",
-	        markercolor = :red,
-	        markersize  = 6,
-	    )
-	
-	    plot3d!(vertical_x, vertical_y, vertical_z,
-	        label        = "Frame",
-	        linecolor    = :black,
-	        linewidth    = 3,
-	    )
-	
-	    plot3d!(arm_x, arm_y, arm_z,
-			label     = "Rotating Arm",
-			linecolor = :black,
-			linewidth = 3,
-	    )
-	
-	    
-	end
+    trace_x = @view geometry.r_x[1:index]
+    trace_y = @view geometry.r_y[1:index]
+    trace_z = @view geometry.r_z[1:index]
 
-	gif(pendulum_animation, filename, fps=30)
+    p = plot3d(
+        trace_x, trace_y, trace_z;
+        linestyle=:dot,
+        linecolor=:blue,
+        linewidth=2,
+        xlim=(-geometry.max_radius, geometry.max_radius),
+        ylim=(-geometry.max_radius, geometry.max_radius),
+        zlim=(0.0, geometry.h_val + geometry.L_val + 0.1),
+        aspect_ratio=:equal,
+        axis=true,
+        title=title,
+        legend=false,
+		margin=-5Plots.mm
+    )
+
+    plot3d!(p, rod_x, rod_y, rod_z, linecolor=:green, linewidth=3)
+    scatter3d!(p, [geometry.r_x[index]], [geometry.r_y[index]], [geometry.r_z[index]], markercolor=:red, markersize=6)
+
+    plot3d!(p, vertical_x, vertical_y, vertical_z, linecolor=:black, linewidth=3)
+    plot3d!(p, arm_x, arm_y, arm_z, linecolor=:black, linewidth=3)
+
+    return p
 end
 
-# ╔═╡ 9c67720a-bb46-4b57-9a88-898147c0f77e
-animate_pendulum_3d(sol_no, p_no; title="3D Pendulum (No Rotation)")
+# ╔═╡ 7d72e478-295d-4465-b48b-5e9bcaa137a8
+begin
+	geo_no = compute_pendulum_geometry(sol_no, p_no)
+	geo_slow = compute_pendulum_geometry(sol_slow, p_slow)
+	geo_fast = compute_pendulum_geometry(sol_fast, p_fast)
+	geo_very_fast = compute_pendulum_geometry(sol_very_fast, p_very_fast)
+	
+	geo_no_drag = compute_pendulum_geometry(sol_no_drag, p_no_drag)
+	geo_slow_drag = compute_pendulum_geometry(sol_slow_drag, p_slow_drag)
+	geo_fast_drag = compute_pendulum_geometry(sol_fast_drag, p_fast_drag)
+	geo_very_fast_drag = compute_pendulum_geometry(sol_very_fast_drag, p_very_fast_drag)
+end
 
-# ╔═╡ c15b6c6f-f25e-4081-a3e0-cced5e163833
-animate_pendulum_3d(sol_no_drag, p_no_drag; title="3D Pendulum (No Rotation + Drag)")
-
-# ╔═╡ 4bf427a3-a066-4abd-8be0-623e9d0aadf8
-animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum (Slow Rotation)")
-
-# ╔═╡ c3be3b8d-96cf-425f-92c5-11443245dffe
-animate_pendulum_3d(sol_slow_drag, p_slow_drag; title="3D Pendulum (Slow Rotation + Drag)")
-
-# ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
-animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum (Fast Rotation)")
-
-# ╔═╡ a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-animate_pendulum_3d(sol_fast_drag, p_fast_drag; title="3D Pendulum (Fast Rotation + Drag)")
-
-# ╔═╡ 2c648029-9916-43dd-94b7-219fd5dec97d
-animate_pendulum_3d(sol_very_fast, p_very_fast; title="3D Pendulum (Very Fast Rotation)")
-
-# ╔═╡ 3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
-animate_pendulum_3d(sol_very_fast_drag, p_very_fast_drag; title="3D Pendulum (Very Fast Rotation + Drag")
+# ╔═╡ c340c3d9-db37-4612-b0dc-2ab39a0d402a
+begin
+	anim = @animate for i in 1:length(geo_no.t_vals)
+	
+	    p1 = pendulum_frame(geo_no, i, title="No Rotation")
+		p3 = pendulum_frame(geo_no_drag, i, title="No Rotation + Drag")
+	    p2 = pendulum_frame(geo_slow, i, title="Slow Rotation")
+		p4 = pendulum_frame(geo_slow_drag, i, title="Slow Rotation + Drag")
+	    p5 = pendulum_frame(geo_fast, i, title="Fast Rotation")
+		p7 = pendulum_frame(geo_fast_drag, i, title="Fast Rotation + Drag")
+	    p6 = pendulum_frame(geo_very_fast, i, title="Very Fast Rotation")
+		p8 = pendulum_frame(geo_very_fast_drag, i, title="Very Fast Rotation + Drag")
+		
+		l = @layout [a b;
+             		 c d;
+             		 e f;
+             		 g h]
+		
+	    plot(p1,p2,p3,p4,p5,p6,p7,p8;
+		     layout=l,
+		     size=(900,1500),
+		     margin = -5Plots.mm,
+			 subplot_padding = 0
+		)
+	end
+	
+	gif(anim,"pendulum_grid.gif",fps=30)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -467,7 +448,7 @@ Symbolics = "~7.8.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.4"
 manifest_format = "2.0"
 project_hash = "519c4d981c804d986924ec2e52cddd4be394ac21"
 
@@ -3379,20 +3360,13 @@ version = "1.13.0+0"
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# ╠═95542217-d27e-49ad-be47-336fa417111d
-# ╠═fe179a19-87a6-4226-aaa4-b64d510fe233
-# ╠═85742128-ab2c-48b7-ac8b-0c313de61dbd
-# ╠═28a21542-acec-4c47-afad-fe2ce71023b2
+# ╟─95542217-d27e-49ad-be47-336fa417111d
+# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╟─85742128-ab2c-48b7-ac8b-0c313de61dbd
 # ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
-# ╠═fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
-# ╟─c15b6c6f-f25e-4081-a3e0-cced5e163833
-# ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
-# ╟─c3be3b8d-96cf-425f-92c5-11443245dffe
-# ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
-# ╟─a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-# ╟─2c648029-9916-43dd-94b7-219fd5dec97d
-# ╟─3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╟─db75c6d6-73af-4521-af8c-57fcf9603c92
+# ╠═7d72e478-295d-4465-b48b-5e9bcaa137a8
+# ╠═c340c3d9-db37-4612-b0dc-2ab39a0d402a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
