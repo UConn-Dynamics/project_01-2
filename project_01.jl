@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.21
+# v0.20.23
 
 using Markdown
 using InteractiveUtils
@@ -251,35 +251,70 @@ To analyze our simulation we can look at the angle the pendulum makes with the v
 We do this by firstly graphing the values, then animating the pendulum system.
 """
 
-# ╔═╡ 1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-begin
-	plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)")
-	plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)")
-	plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)")
-	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
-
-	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
-	plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)")
-	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
-	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg, plot_fast,  plot_very_fast, plot_fast_dg, plot_very_fast_dg; layout=(4,2), size=(1100, 1100))
-end
-
 # ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
 begin
-	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
-	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)")
-	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
-	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
+    anim_theta = @animate for i in 1:2:length(sol_no.t)
 
-	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
-	plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)")
-	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
-	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
-	
-	plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg, plot_ω_fast,  plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
+		plot_no = Plots.plot(sol_no, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_no, [sol_no.t[i]], [sol_no[θ_s][i]], markersize=5, label="")
+		plot_slow = Plots.plot(sol_slow, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_slow, [sol_slow.t[i]], [sol_slow[θ_s][i]], markersize=5, label="")
+		plot_fast = Plots.plot(sol_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_fast, [sol_fast.t[i]], [sol_fast[θ_s][i]], markersize=5, label="")
+		plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)", label="θ_s", legend=:topright)
+		scatter!(plot_very_fast, [sol_very_fast.t[i]], [sol_very_fast[θ_s][i]], markersize=5, label="")
+
+		plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_no_dg, [sol_no_drag.t[i]], [sol_no_drag[θ_s][i]], markersize=5, label="")
+		plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_slow_dg, [sol_slow_drag.t[i]], [sol_slow_drag[θ_s][i]], markersize=5, label="")
+		plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_fast_dg, [sol_fast_drag.t[i]], [sol_fast_drag[θ_s][i]], markersize=5, label="")
+		plot_very_fast_dg = Plots.plot(sol_very_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[θ_s][i]], markersize=5, label="")
+
+        plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg,
+             plot_fast, plot_very_fast, plot_fast_dg, plot_very_fast_dg;
+             layout=(4,2), size=(1100,1100))
+    end
+
+    gif(anim_theta, "pendulum_theta_animation.gif", fps=14)
 end
+
+# ╔═╡ 85742128-ab2c-48b7-ac8b-0c313de61dbd
+begin
+	anim_omega = @animate for i in 1:2:length(sol_no.t)
+		plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_no, [sol_no.t[i]], [sol_no[ω_s][i]], markersize=5, label="")
+		plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_slow, [sol_slow.t[i]], [sol_slow[ω_s][i]], markersize=5, label="")
+		plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_fast, [sol_fast.t[i]], [sol_fast[ω_s][i]], markersize=5, label="")
+		plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_very_fast, [sol_very_fast.t[i]], [sol_very_fast[ω_s][i]], markersize=5, label="")
+
+		plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_no_dg, [sol_no_drag.t[i]], [sol_no_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_slow_dg, [sol_slow_drag.t[i]], [sol_slow_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_fast_dg, [sol_fast_drag.t[i]], [sol_fast_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_very_fast_dg = Plots.plot(sol_very_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[ω_s][i]], markersize=5, label="")
+
+		plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg,
+             plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg;
+             layout=(4,2), size=(1100,1100))
+	end
+
+    gif(anim_omega, "pendulum_omega_animation.gif", fps=14)
+end
+
+# ╔═╡ 28a21542-acec-4c47-afad-fe2ce71023b2
+# ╠═╡ disabled = true
+#=╠═╡
+
+  ╠═╡ =#
 
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
 md"""
@@ -3344,13 +3379,14 @@ version = "1.13.0+0"
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# ╟─95542217-d27e-49ad-be47-336fa417111d
-# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╠═95542217-d27e-49ad-be47-336fa417111d
+# ╠═fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╠═85742128-ab2c-48b7-ac8b-0c313de61dbd
+# ╠═28a21542-acec-4c47-afad-fe2ce71023b2
 # ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
-# ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╟─9c67720a-bb46-4b57-9a88-898147c0f77e
+# ╠═fcd29939-01e8-42ae-8fef-f70ca60eebef
+# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
 # ╟─c15b6c6f-f25e-4081-a3e0-cced5e163833
 # ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
 # ╟─c3be3b8d-96cf-425f-92c5-11443245dffe
