@@ -69,7 +69,8 @@ begin
 	# ρ  = air density
 	# Cd = drag coefficient
 	# Rs = radius of pendulum bob
-	@parameters L h1 w1 m g Ω ρ Cd Rs
+	# c = damping coefficient representing hinge friction or a damper
+	@parameters L h1 w1 m g Ω ρ Cd Rs c
 	# Define time as the independent variable.
 	@independent_variables t
 	# θ(t) is the pendulum angle relative to the vertical direction.
@@ -79,7 +80,7 @@ begin
 	θ_dot_dot = D(D(θ))
 	# The frame rotates at constant angular velocity Ω,
 	# so the rotation angle is φ = Ωt.
-	φ = Ω * t
+	φ = Ω * t 
 end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
@@ -179,7 +180,12 @@ begin
 	k = 1/2 * ρ * Cd * pi * Rs^2
 	# Aerodynamic drag force acting opposite to velocity.
 	FDrag = -k*magnitude(v)*v
-	Q = dot_product(FDrag, dr_dθ)
+	# Mechanical damping torque proportional to angular velocity
+	Fdamp = -c * θ_dot
+	Q_drag = dot_product(FDrag, dr_dθ)
+
+	# Total generalized force including drag and damping
+	Q = Q_drag + Fdamp
 
 # solving for θ_dot_dot
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ - Q)
@@ -201,25 +207,24 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1, ρ, Cd, Rs, c])
 	sys = structural_simplify(sys)
 end
 
 # ╔═╡ 44d9e415-a7ac-431c-a72e-0d4392b2e629
 # compute ODE using specified variables
-function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5, 
-						   m_val=0.1, w1_val=0.1, h1_val=0.2, θ_0=0.5, θ_dot_0=0.0,
-						   tspan=(0.0,10.0), ρ_val=0.0, Cd_val=0.47, Rs_val=0.5)
-	
-	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
-
-	p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val, w1 => w1_val, h1 => h1_val, ρ => ρ_val, Cd => Cd_val, Rs => Rs_val)
-
-	prob = ODEProblem(sys, merge(u0, p), tspan)
-
-	sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
-
-	return sol, p
+function simulate_pendulum(sys; L_val=0.15, g_val=9.8, Ω_val=0.5,
+                           m_val=0.1, w1_val=0.1, h1_val=0.2,
+                           θ_0=0.5, θ_dot_0=0.0, tspan=(0.0,10.0),
+                           ρ_val=0.0, Cd_val=0.47, Rs_val=0.5, c_val=0.02)
+    u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
+    p = Dict(L => L_val, g => g_val, Ω => Ω_val, m => m_val,
+             w1 => w1_val, h1 => h1_val, ρ => ρ_val,
+             Cd => Cd_val, Rs => Rs_val,
+             c => c_val)  # <<< Add this line
+    prob = ODEProblem(sys, merge(u0, p), tspan)
+    sol = solve(prob, Tsit5(); reltol=1e-6, abstol=1e-8, saveat=0.0333)
+    return sol, p
 end
 
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
@@ -231,7 +236,10 @@ begin
 
 	# slow rotation with and without drag
    	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
-	sol_slow_drag, p_slow_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
+	sol_slow_drag_damp, p_slow_drag_damp = simulate_pendulum(sys;
+                                                         Ω_val=0.5,
+                                                         ρ_val=1.225,
+                                                         c_val=0.02)
 
 	# fast rotation with and without drag
     sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0) 
@@ -259,7 +267,7 @@ begin
 	plot_very_fast = Plots.plot(sol_very_fast, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation)")
 
 	plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)")
-	plot_slow_dg = Plots.plot(sol_slow_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag)")
+	plot_slow_dg = Plots.plot(sol_slow_drag_damp, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag + Damping)")
 	plot_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast Rotation + Drag)")
 	plot_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Very Fast Rotation + Drag)")
 	
@@ -269,16 +277,16 @@ end
 # ╔═╡ fe179a19-87a6-4226-aaa4-b64d510fe233
 begin
 	plot_ω_no = Plots.plot(sol_no, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation)")
-	plot_ω_slow = Plots.plot(sol_slow, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation)")
+	plot_ω_slow_dg_damp = Plots.plot(sol_slow_drag_damp, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag + Damping)")
 	plot_ω_fast = Plots.plot(sol_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation)")
 	plot_ω_very_fast = Plots.plot(sol_very_fast, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation)")
 
 	plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)")
-	plot_ω_slow_dg = Plots.plot(sol_slow_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow Rotation + Drag)")
+	plot_slow_dg_damp = Plots.plot(sol_slow_drag_damp, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow Rotation + Drag + Damping)")
 	plot_ω_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast Rotation + Drag)")
 	plot_ω_very_fast_dg = Plots.plot(sol_fast_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Very Fast Rotation + Drag)")
 	
-	plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg, plot_ω_fast,  plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
+	plot(plot_ω_no, plot_ω_slow_dg_damp, plot_ω_no_dg, plot_ω_slow_dg_damp, plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg; layout=(4,2), size=(1100, 1100))
 end
 
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
@@ -397,7 +405,7 @@ animate_pendulum_3d(sol_no_drag, p_no_drag; title="3D Pendulum (No Rotation + Dr
 animate_pendulum_3d(sol_slow, p_slow; title="3D Pendulum (Slow Rotation)")
 
 # ╔═╡ c3be3b8d-96cf-425f-92c5-11443245dffe
-animate_pendulum_3d(sol_slow_drag, p_slow_drag; title="3D Pendulum (Slow Rotation + Drag)")
+animate_pendulum_3d(sol_slow_drag_damp, p_slow_drag_damp; title="3D Pendulum (Slow Rotation + Drag + Damping)")
 
 # ╔═╡ 7f52e3e0-5691-4093-a9dc-af84bdd368fc
 animate_pendulum_3d(sol_fast, p_fast; title="3D Pendulum (Fast Rotation)")
@@ -3345,18 +3353,18 @@ version = "1.13.0+0"
 # ╠═44d9e415-a7ac-431c-a72e-0d4392b2e629
 # ╠═8776d0cc-f9fb-43ee-babe-b77ec4f189ce
 # ╟─95542217-d27e-49ad-be47-336fa417111d
-# ╟─1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
-# ╟─fe179a19-87a6-4226-aaa4-b64d510fe233
-# ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
+# ╠═1a7f4f86-3dc5-4bd3-a25a-4a8f6a96e14e
+# ╠═fe179a19-87a6-4226-aaa4-b64d510fe233
+# ╠═9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─fcd29939-01e8-42ae-8fef-f70ca60eebef
-# ╟─9c67720a-bb46-4b57-9a88-898147c0f77e
-# ╟─c15b6c6f-f25e-4081-a3e0-cced5e163833
+# ╠═9c67720a-bb46-4b57-9a88-898147c0f77e
+# ╠═c15b6c6f-f25e-4081-a3e0-cced5e163833
 # ╟─4bf427a3-a066-4abd-8be0-623e9d0aadf8
-# ╟─c3be3b8d-96cf-425f-92c5-11443245dffe
-# ╟─7f52e3e0-5691-4093-a9dc-af84bdd368fc
-# ╟─a1ef14a4-c382-424c-8a1f-4843bcec9b7f
-# ╟─2c648029-9916-43dd-94b7-219fd5dec97d
-# ╟─3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
+# ╠═c3be3b8d-96cf-425f-92c5-11443245dffe
+# ╠═7f52e3e0-5691-4093-a9dc-af84bdd368fc
+# ╠═a1ef14a4-c382-424c-8a1f-4843bcec9b7f
+# ╠═2c648029-9916-43dd-94b7-219fd5dec97d
+# ╠═3d607c9b-7f3f-41bb-881f-0ecf0b5875ac
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
