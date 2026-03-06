@@ -69,9 +69,9 @@ begin
 	# ρ  = air density
 	# Cd = drag coefficient
 	# Rs = radius of pendulum bob
-	# Limp = ?
-	# t_imp = ?
-  # c = ?
+	# Limp = the amount of angular velocity added during impulse
+	# t_imp = the time when the impulse occurs
+  	# c = dampening coefficient
 	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp c
 	# Define time as the independent variable.
 	@independent_variables t
@@ -168,6 +168,15 @@ $k = \frac{1}{2} \rho c_d \pi R^2$
 
 """
 
+# ╔═╡ ff1c0efe-9668-4c6b-8f94-74f22feb4eb5
+md"""
+We also can incorporate dampening through friction between the string attachment point onto the frame. We can model this generalized torque as:
+
+$\tau_{damp} = -c \dot{\theta}$
+
+We can combine this frictional torque at the attachment axis and the drag due to the atmosphere to get a fairly realistic numerical estimate of the real forces at play.
+"""
+
 # ╔═╡ 242302eb-fe7e-4c20-83a2-f5a976fbbac9
 begin
 # Euler-Lagrange equation derivatives
@@ -182,12 +191,12 @@ begin
 	k = 1/2 * ρ * Cd * pi * Rs^2
 	# Aerodynamic drag force acting opposite to velocity.
 	FDrag = -k*magnitude(v)*v
-	# Mechanical damping torque proportional to angular velocity
-	Fdamp = -c * θ_dot
 	Q_drag = dot_product(FDrag, dr_dθ)
-
+	# Mechanical damping torque proportional to angular velocity
+	Tdamp = -c * θ_dot
+	
 	# Total generalized force including drag and damping
-	Q = Q_drag + Fdamp
+	Q = Q_drag + Tdamp
 
 # solving for θ_dot_dot
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ - Q)
@@ -254,7 +263,7 @@ function simulate_pendulum(sys; L_val=0.15,
 								Rs_val=0.5,
 								Limp_val=0.0,
 								t_imp_val=1.0,
-                c_val=0.0)
+                				c_val=0.0)
 	
 	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
@@ -269,10 +278,9 @@ function simulate_pendulum(sys; L_val=0.15,
 			Rs => Rs_val,
 			Limp => Limp_val,
 			t_imp => t_imp_val,
-      c => c_val)
+      		c => c_val)
 
 	function affect!(integrator)
-		# putting a negative sign here caused the impulse to look better, there might be a sign error somewhere.
 		integrator.u[2] += Limp_val
 	end
 
@@ -290,7 +298,7 @@ function simulate_pendulum(sys; L_val=0.15,
 end
 
 # ╔═╡ 8776d0cc-f9fb-43ee-babe-b77ec4f189ce
-# 10 cases, no rotation, slow rotation, fast rotation, very fast rotation, slow with impulse, and all previous with drag. 
+# 12 cases, no rotation, slow rotation, fast rotation, very fast rotation, slow with impulse, fast with dampening, and all previous with drag. 
 begin
 	# no rotation
 	sol_no, p_no = simulate_pendulum(sys; Ω_val=0.0)
@@ -298,10 +306,7 @@ begin
 
 	# slow rotation with and without drag
    	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
-	sol_slow_drag_damp, p_slow_drag_damp = simulate_pendulum(sys;
-                                                         Ω_val=0.5,
-                                                         ρ_val=1.225,
-                                                         c_val=0.02)
+	sol_slow_drag, p_slow_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
 
 	# fast rotation with and without drag
     sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0) 
@@ -311,9 +316,13 @@ begin
 	sol_very_fast, p_very_fast = simulate_pendulum(sys; Ω_val=16.0)
 	sol_very_fast_drag, p_very_fast_drag = simulate_pendulum(sys; Ω_val=16.0, ρ_val=1.225)
 
-	# impulse with and without drag
+	# impulse with and without drag on a slow rotation
     sol_impulse, p_impulse = simulate_pendulum(sys; Ω_val=0.5, Limp_val=1.0)
 	sol_impulse_drag, p_impulse_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225, Limp_val=1.0)
+
+	# dampening with and without drag on a fast rotation
+	sol_damp, p_damp = simulate_pendulum(sys; Ω_val=0.5, c_val=1e-3)
+	sol_damp_drag, p_damp_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225, c_val=1e-3)
 end
 
 # ╔═╡ 95542217-d27e-49ad-be47-336fa417111d
@@ -339,6 +348,8 @@ begin
 		scatter!(plot_very_fast, [sol_very_fast.t[i]], [sol_very_fast[θ_s][i]], markersize=5, label="")
 		plot_impulse = Plots.plot(sol_impulse, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow + Impulse)", label="θ_s", legend=:topright)
 		scatter!(plot_impulse, [sol_impulse.t[i]], [sol_impulse[θ_s][i]], markersize=5, label="")
+		plot_damp = Plots.plot(sol_damp, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast + Damp)", label="θ_s", legend=:topright)
+		scatter!(plot_damp, [sol_damp.t[i]], [sol_damp[θ_s][i]], markersize=5, label="")
 
 		plot_no_dg = Plots.plot(sol_no_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (No Rotation + Drag)", label="θ_s", legend=:topright)
 		scatter!(plot_no_dg, [sol_no_drag.t[i]], [sol_no_drag[θ_s][i]], markersize=5, label="")
@@ -350,11 +361,13 @@ begin
 		scatter!(plot_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[θ_s][i]], markersize=5, label="")
 		plot_impulse_dg = Plots.plot(sol_impulse_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Slow + Impulse + Drag)", label="θ_s", legend=:topright)
 		scatter!(plot_impulse_dg, [sol_impulse_drag.t[i]], [sol_impulse_drag[θ_s][i]], markersize=5, label="")
+		plot_damp_dg = Plots.plot(sol_damp_drag, idxs=[θ_s], xlabel="t (sec)", ylabel="θ (rad)", title="θ vs Time (Fast + Damp + Drag)", label="θ_s", legend=:topright)
+		scatter!(plot_damp_dg, [sol_damp_drag.t[i]], [sol_damp_drag[θ_s][i]], markersize=5, label="")
 
         plot(plot_no, plot_slow, plot_no_dg, plot_slow_dg,
              plot_fast, plot_very_fast, plot_fast_dg, plot_very_fast_dg,
-			 plot_impulse, plot_impulse_dg;
-             layout=(5,2), size=(1100,1100), legend=false)
+			 plot_impulse, plot_damp, plot_impulse_dg, plot_damp_dg;
+             layout=(6,2), size=(1100,1100), legend=false)
     end
 
     gif(anim_theta, "pendulum_theta_animation.gif", fps=14)
@@ -373,6 +386,8 @@ begin
 		scatter!(plot_ω_very_fast, [sol_very_fast.t[i]], [sol_very_fast[ω_s][i]], markersize=5, label="")
 		plot_ω_impulse = Plots.plot(sol_impulse, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow + Impulse)", label="ω_s", legend=:topright)
 		scatter!(plot_ω_impulse, [sol_impulse.t[i]], [sol_impulse[ω_s][i]], markersize=5, label="")
+		plot_ω_damp = Plots.plot(sol_damp, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast + Damp)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_damp, [sol_damp.t[i]], [sol_damp[ω_s][i]], markersize=5, label="")
 
 		plot_ω_no_dg = Plots.plot(sol_no_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (No Rotation + Drag)", label="ω_s", legend=:topright)
 		scatter!(plot_ω_no_dg, [sol_no_drag.t[i]], [sol_no_drag[ω_s][i]], markersize=5, label="")
@@ -384,11 +399,13 @@ begin
 		scatter!(plot_ω_very_fast_dg, [sol_very_fast_drag.t[i]], [sol_very_fast_drag[ω_s][i]], markersize=5, label="")
 		plot_ω_impulse_dg = Plots.plot(sol_impulse_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Slow + Impulse + Drag)", label="ω_s", legend=:topright)
 		scatter!(plot_ω_impulse_dg, [sol_impulse_drag.t[i]], [sol_impulse_drag[ω_s][i]], markersize=5, label="")
+		plot_ω_damp_dg = Plots.plot(sol_damp_drag, idxs=[ω_s], xlabel="t (sec)", ylabel="ω (rad/s)", title="ω vs Time (Fast + Damp + Drag)", label="ω_s", legend=:topright)
+		scatter!(plot_ω_damp_dg, [sol_damp_drag.t[i]], [sol_damp_drag[ω_s][i]], markersize=5, label="")
 
 		plot(plot_ω_no, plot_ω_slow, plot_ω_no_dg, plot_ω_slow_dg,
              plot_ω_fast, plot_ω_very_fast, plot_ω_fast_dg, plot_ω_very_fast_dg,
-			 plot_ω_impulse, plot_ω_impulse_dg;
-             layout=(5,2), size=(1100,1100), legend=false)
+			 plot_ω_impulse, plot_ω_damp, plot_ω_impulse_dg, plot_ω_damp_dg;
+             layout=(6,2), size=(1100,1100), legend=false)
 	end
 
     gif(anim_omega, "pendulum_omega_animation.gif", fps=14)
@@ -396,11 +413,15 @@ end
 
 # ╔═╡ 9824e8cc-fddc-413d-81e1-a60bc8aeed40
 md"""
+# Conclusion and Animation
+
 Notice that the equilibrium angle for the pendulum is non-zero for the fast speeds and zero for the slow speeds. This demonstrates how a high $\omega$ value causes the centripetal acceleration to have largest magnitude, making the pendulum move like a circle. For low $\omega$ values, tangential acceleration is larger, so the pendulum moves around and behaves closer to the standard planar pendulum.
 
 We see this most clearly in the animations below, where the slow $\omega$ speed pendulums just swing around like a normal pendulum (the drag one's swing coming close to a stop). The high $\omega$ pendulums either wildy spin creating spherical traces, or due to drag, lose their swing oscillation, and end up swinging in a circle caused by the frames spinning.
 
 It looks like below a certain $\omega$ value, the pendulum will oscillate around 0 degrees like in the no and slow rotation cases. Above that value the equilibrium angle approaches $\frac{\pi}{2}$. With drag, the pendulum stops oscillating, and just approaches and stays at the equilibrium value.
+
+Including dampening causes the system to revert to the 0 degree equilibrium, since this dampening is caused by friction at the pendulums pivot, it will kill the energy in the motion causing it to end up hanging perfectly vertical. This is different than just air resistance which allows the pendulum to swing in a horizontal circle.
 """
 
 # ╔═╡ 0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
@@ -483,6 +504,9 @@ begin
 
 	geo_impulse = compute_pendulum_geometry(sol_impulse, p_impulse)
 	geo_impulse_drag = compute_pendulum_geometry(sol_impulse_drag, p_impulse_drag)
+
+	geo_damp = compute_pendulum_geometry(sol_damp, p_damp)
+	geo_damp_drag = compute_pendulum_geometry(sol_damp_drag, p_damp_drag)
 end
 
 # ╔═╡ c340c3d9-db37-4612-b0dc-2ab39a0d402a
@@ -502,16 +526,19 @@ begin
 		p7  = pendulum_frame(geo_fast_drag, i, title="Fast Rotation + Drag $t_str")
 		p8  = pendulum_frame(geo_very_fast_drag, i, title="Very Fast Rotation + Drag $t_str")
 		
-		p9  = pendulum_frame(geo_impulse, i, title="Impulse $t_str")
-		p10 = pendulum_frame(geo_impulse_drag, i, title="Impulse + Drag $t_str")
+		p9  = pendulum_frame(geo_impulse, i, title="Slow + Impulse $t_str")
+		p10 = pendulum_frame(geo_damp, i, title="Fast + Damp $t_str")
+		p11 = pendulum_frame(geo_impulse_drag, i, title="Slow + Impulse + Drag $t_str")
+		p12 = pendulum_frame(geo_damp_drag, i, title="Fast + Damp + Drag $t_str")
 			
 		l = @layout [a b;
 					 c d;
 					 e f;
 					 g h;
-					 i j]
+					 i j;
+					 k l]
 		
-	    plot(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10;
+	    plot(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12;
 		     layout=l,
 		     size=(900,1500),
 		     margin = -5Plots.mm,
@@ -3453,6 +3480,7 @@ version = "1.13.0+0"
 # ╟─2c97d2eb-070c-499f-8bbc-9f650953ccd1
 # ╠═61500b9e-061e-4412-9fa7-9931ad27bee4
 # ╟─107838fd-dc24-4b35-bc0f-531cfc6362f2
+# ╠═ff1c0efe-9668-4c6b-8f94-74f22feb4eb5
 # ╠═242302eb-fe7e-4c20-83a2-f5a976fbbac9
 # ╟─93902fe2-5fcd-4f16-8384-9768002d9ee1
 # ╠═28406b28-a701-4b46-8620-5df4a5dc70ae
@@ -3465,7 +3493,7 @@ version = "1.13.0+0"
 # ╟─9824e8cc-fddc-413d-81e1-a60bc8aeed40
 # ╟─0ae7e576-5c31-4ec7-bd4e-6df4b41c7c4f
 # ╟─db75c6d6-73af-4521-af8c-57fcf9603c92
-# ╠═7d72e478-295d-4465-b48b-5e9bcaa137a8
-# ╠═c340c3d9-db37-4612-b0dc-2ab39a0d402a
+# ╟─7d72e478-295d-4465-b48b-5e9bcaa137a8
+# ╟─c340c3d9-db37-4612-b0dc-2ab39a0d402a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
