@@ -71,7 +71,8 @@ begin
 	# Rs = radius of pendulum bob
 	# Limp = ?
 	# t_imp = ?
-	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp
+  # c = ?
+	@parameters L h1 w1 m g Ω ρ Cd Rs Limp t_imp c
 	# Define time as the independent variable.
 	@independent_variables t
 	# θ(t) is the pendulum angle relative to the vertical direction.
@@ -81,7 +82,7 @@ begin
 	θ_dot_dot = D(D(θ))
 	# The frame rotates at constant angular velocity Ω,
 	# so the rotation angle is φ = Ωt.
-	φ = Ω * t
+	φ = Ω * t 
 end
 
 # ╔═╡ e28f72c0-7df2-4029-ab2a-4f21f2bade62
@@ -181,7 +182,12 @@ begin
 	k = 1/2 * ρ * Cd * pi * Rs^2
 	# Aerodynamic drag force acting opposite to velocity.
 	FDrag = -k*magnitude(v)*v
-	Q = dot_product(FDrag, dr_dθ)
+	# Mechanical damping torque proportional to angular velocity
+	Fdamp = -c * θ_dot
+	Q_drag = dot_product(FDrag, dr_dθ)
+
+	# Total generalized force including drag and damping
+	Q = Q_drag + Fdamp
 
 # solving for θ_dot_dot
 	el_eq = expand_derivatives(D(dL_dθ_dot) - dL_dθ - Q)
@@ -203,7 +209,7 @@ begin
 		D(θ_s) ~ ω_s,
 		D(ω_s) ~ rhs_expr
 	]
-	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs,Limp,t_imp])
+	@named sys = ODESystem(eqs, t, [θ_s, ω_s], [L, g, Ω, m, w1, h1,ρ,Cd,Rs,Limp,t_imp, c])
 	sys = structural_simplify(sys)
 end
 
@@ -247,7 +253,8 @@ function simulate_pendulum(sys; L_val=0.15,
 								Cd_val=0.47,
 								Rs_val=0.5,
 								Limp_val=0.0,
-								t_imp_val=1.0)
+								t_imp_val=1.0,
+                c_val=0.0)
 	
 	u0 = Dict(θ_s => θ_0, ω_s => θ_dot_0)
 
@@ -261,7 +268,8 @@ function simulate_pendulum(sys; L_val=0.15,
 			Cd => Cd_val,
 			Rs => Rs_val,
 			Limp => Limp_val,
-			t_imp => t_imp_val)
+			t_imp => t_imp_val,
+      c => c_val)
 
 	function affect!(integrator)
 		# putting a negative sign here caused the impulse to look better, there might be a sign error somewhere.
@@ -290,7 +298,10 @@ begin
 
 	# slow rotation with and without drag
    	sol_slow, p_slow = simulate_pendulum(sys; Ω_val=0.5)
-	sol_slow_drag, p_slow_drag = simulate_pendulum(sys; Ω_val=0.5, ρ_val=1.225)
+	sol_slow_drag_damp, p_slow_drag_damp = simulate_pendulum(sys;
+                                                         Ω_val=0.5,
+                                                         ρ_val=1.225,
+                                                         c_val=0.02)
 
 	# fast rotation with and without drag
     sol_fast, p_fast = simulate_pendulum(sys; Ω_val=8.0) 
